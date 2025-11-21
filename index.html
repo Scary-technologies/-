@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nasab - AI Family Tree</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@100..900&family=Noto+Naskh+Arabic:wght@400;700&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Vazirmatn', 'sans-serif'],
+              serif: ['Noto Naskh Arabic', 'serif'],
+            },
+            colors: {
+              primary: '#0f766e', // teal-700
+              secondary: '#f59e0b', // amber-500
+              dark: '#1e293b',
+              vintage: {
+                 bg: '#fdf6e3',
+                 paper: '#eee8d5',
+                 text: '#586e75',
+                 accent: '#cb4b16'
+              }
+            },
+            animation: {
+              'enter': 'enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              'fade-in-scale': 'fadeInScale 0.3s ease-out forwards',
+            },
+            keyframes: {
+              enter: {
+                '0%': { opacity: '0', transform: 'translateY(10px) scale(0.98)' },
+                '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+              },
+              fadeInScale: {
+                '0%': { opacity: '0', transform: 'scale(0.95)' },
+                '100%': { opacity: '1', transform: 'scale(1)' },
+              }
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      body {
+        font-family: 'Vazirmatn', sans-serif;
+        transition: background 0.5s ease;
+      }
+      
+      /* Modern Theme */
+      body.theme-modern {
+        background-color: #f0f4f8;
+        background-image: 
+          radial-gradient(at 0% 0%, rgba(15, 118, 110, 0.1) 0px, transparent 50%),
+          radial-gradient(at 100% 100%, rgba(245, 158, 11, 0.1) 0px, transparent 50%),
+          radial-gradient(#cbd5e1 1px, transparent 1px);
+        background-size: 100% 100%, 100% 100%, 24px 24px;
+        background-attachment: fixed;
+      }
+
+      /* Vintage Theme */
+      body.theme-vintage {
+        background-color: #fdf6e3;
+        background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d3c6aa' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        color: #433422;
+        font-family: 'Noto Naskh Arabic', serif;
+      }
+
+      /* Dark Theme */
+      body.theme-dark {
+        background-color: #0f172a;
+        background-image: 
+          radial-gradient(at 0% 0%, rgba(15, 118, 110, 0.15) 0px, transparent 50%),
+          radial-gradient(at 100% 100%, rgba(245, 158, 11, 0.1) 0px, transparent 50%),
+          radial-gradient(#1e293b 1px, transparent 1px);
+        background-size: 100% 100%, 100% 100%, 30px 30px;
+        background-attachment: fixed;
+        color: #e2e8f0;
+      }
+
+      /* Hide scrollbar for cleaner UI in panels */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+      }
+      
+      /* Advanced Glassmorphism */
+      .glass-panel {
+        background: rgba(255, 255, 255, 0.4);
+        backdrop-filter: blur(16px) saturate(180%);
+        -webkit-backdrop-filter: blur(16px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05);
+      }
+      
+      .glass-panel-dark {
+        background: rgba(30, 41, 59, 0.6);
+        backdrop-filter: blur(16px) saturate(180%);
+        -webkit-backdrop-filter: blur(16px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+      }
+      
+      .glass-panel-vintage {
+        background: rgba(253, 246, 227, 0.85);
+        backdrop-filter: blur(8px);
+        border: 1px solid #d3c6aa;
+        box-shadow: 4px 4px 0px rgba(211, 198, 170, 0.5);
+      }
+
+      .glass-card {
+        background: rgba(255, 255, 255, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        transition: all 0.3s ease;
+      }
+      .glass-card:hover {
+        background: rgba(255, 255, 255, 0.5);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+      }
+
+      .glass-card-dark {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        transition: all 0.3s ease;
+      }
+      .glass-card-dark:hover {
+        background: rgba(255, 255, 255, 0.07);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "d3": "https://aistudiocdn.com/d3@^7.9.0",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0"
+  }
+}
+</script>
+</head>
+  <body class="theme-modern">
+    <div id="root"></div>
+  </body>
+</html>
