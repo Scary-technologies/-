@@ -104,8 +104,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     const margin = { top: 80, right: 120, bottom: 80, left: 120 };
     const width = dimensions.width - margin.left - margin.right;
-    // const height = dimensions.height - margin.top - margin.bottom;
-
+    
     const svg = d3.select(svgRef.current)
       .attr("width", dimensions.width)
       .attr("height", dimensions.height);
@@ -156,9 +155,20 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     // Declare the tree layout
     let treemap;
     if (orientation === 'horizontal') {
-        treemap = d3.tree<FamilyMember>().nodeSize([90, 200]);
+        treemap = d3.tree<FamilyMember>()
+            .nodeSize([90, 240]) // Increased vertical gap for separation
+            .separation((a, b) => {
+                // Extra separation between different sub-trees (clans)
+                if (a.parent === b.parent) return 1.2;
+                return 2.5; 
+            });
     } else {
-        treemap = d3.tree<FamilyMember>().nodeSize([140, 140]);
+        treemap = d3.tree<FamilyMember>()
+            .nodeSize([160, 160])
+            .separation((a, b) => {
+                if (a.parent === b.parent) return 1.2;
+                return 2.5;
+            });
     }
 
     const root = d3.hierarchy(data, (d) => d.children);
@@ -170,8 +180,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     nodes.descendants().forEach(d => { if(d.depth > maxDepth) maxDepth = d.depth; });
     const heatmapColorScale = d3.scaleLinear<string>()
         .domain([0, maxDepth])
-        .range(["#1e293b", "#cbd5e1"]); // Dark to Light slate
-
+        .range(["#1e293b", "#cbd5e1"]);
 
     // Create a lookup for nodes
     const nodeMap = new Map<string, d3.HierarchyPointNode<FamilyMember>>();
@@ -179,11 +188,10 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       nodeMap.set(d.data.id, d);
     });
     
-    // Update selected node position for quick menu
+    // Update selected node position
     if (selectedId) {
         const sNode = nodeMap.get(selectedId);
         if (sNode) {
-            // Apply transform manually to get screen coords
             const t = zoomTransform;
             const x = orientation === 'horizontal' ? sNode.y : sNode.x;
             const y = orientation === 'horizontal' ? sNode.x : sNode.y;
@@ -197,7 +205,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     } else {
         setSelectedNodePos(null);
     }
-
 
     // Prepare extra connection links
     const extraLinks: { source: d3.HierarchyPointNode<FamilyMember>; target: d3.HierarchyPointNode<FamilyMember>; label: string }[] = [];
@@ -218,7 +225,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     // Link Generators
     let linkGenerator: any;
-    
     if (linkStyle === 'curved') {
        if (orientation === 'horizontal') {
          linkGenerator = d3.linkHorizontal<d3.HierarchyPointLink<FamilyMember>, d3.HierarchyPointNode<FamilyMember>>()
@@ -230,17 +236,19 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             .y((d) => d.y);
        }
     } else {
-       // Straight lines
        linkGenerator = (d: d3.HierarchyPointLink<FamilyMember>) => {
           if (orientation === 'horizontal') {
-             return `M${d.source.y},${d.source.x} L${d.source.y},${d.target.x} L${d.target.y},${d.target.x}`; // Orthogonal
+             return `M${d.source.y},${d.source.x} L${d.source.y},${d.target.x} L${d.target.y},${d.target.x}`; 
           } else {
-             return `M${d.source.x},${d.source.y} L${d.target.x},${d.source.y} L${d.target.x},${d.target.y}`; // Orthogonal
+             return `M${d.source.x},${d.source.y} L${d.target.x},${d.source.y} L${d.target.x},${d.target.y}`;
           }
        };
     }
 
-    // Draw Extra Links
+    // *** CRITICAL CHANGE: Filter out links originating from SystemRoot ***
+    const visibleLinks = nodes.links().filter(d => d.source.data.relation !== 'SystemRoot');
+
+    // Draw Extra Links (Marriages/Connections)
     g.selectAll(".extra-link")
       .data(extraLinks)
       .enter().append("path")
@@ -257,9 +265,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
          return (srcHi && tgtHi) ? 1 : 0.1;
       });
 
-    // Draw Standard Links
+    // Draw Standard Links (Filtered)
     g.selectAll(".link")
-      .data(nodes.links())
+      .data(visibleLinks)
       .enter().append("path")
       .attr("class", "link")
       .attr("d", linkGenerator)
@@ -300,6 +308,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         event.stopPropagation();
       })
       .style("opacity", (d: d3.HierarchyPointNode<FamilyMember>) => {
+         // *** CRITICAL: Completely hide SystemRoot ***
          if (d.data.relation === 'SystemRoot') return 0;
          if (!hasHighlight) return 1;
          return highlightedIds.has(d.data.id) ? 1 : 0.2; 
@@ -307,6 +316,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .style("transition", "opacity 0.4s ease")
       .style("pointer-events", (d: d3.HierarchyPointNode<FamilyMember>) => d.data.relation === 'SystemRoot' ? 'none' : 'all');
 
+    // ... [Rest of the drawing logic remains mostly the same] ...
 
     // 1. Selected State Ring
     node.filter((d: d3.HierarchyPointNode<FamilyMember>) => d.data.id === selectedId)
@@ -318,7 +328,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         .attr("stroke-dasharray", "4,4")
         .attr("class", "animate-spin-slow");
 
-    // 2. Main Circle Background (Gradient or Heatmap)
+    // 2. Main Circle Background
     node.append("circle")
       .attr("r", 26)
       .style("fill", (d: d3.HierarchyPointNode<FamilyMember>) => {
@@ -331,7 +341,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .style("stroke-width", "2px")
       .classed("drop-shadow-md", true);
 
-    // 3. Clip Path for Image
+    // 3. Clip Path
     node.each(function(d: d3.HierarchyPointNode<FamilyMember>, i) {
         if (d.data.imageUrl) {
              defs.append("clipPath")
@@ -341,7 +351,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         }
     });
 
-    // 4. Image Overlay
+    // 4. Image
     node.filter((d: d3.HierarchyPointNode<FamilyMember>) => !!d.data.imageUrl && !heatmapMode)
         .append("image")
         .attr("xlink:href", (d: d3.HierarchyPointNode<FamilyMember>) => d.data.imageUrl || '')
@@ -352,8 +362,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         .attr("clip-path", (d, i) => `url(#clip-circle-${i})`)
         .attr("preserveAspectRatio", "xMidYMid slice");
 
-
-    // 5. Name Label Background
+    // 5. Label Background
     node.append("rect")
       .attr("rx", 4)
       .attr("ry", 4)
@@ -364,7 +373,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr("fill", colors.bgLabel)
       .style("opacity", 0.9);
 
-    // 6. Name Text
+    // 6. Name
     node.append("text")
       .attr("dy", orientation === 'horizontal' ? "49" : "49")
       .style("text-anchor", "middle")
@@ -374,7 +383,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .style("font-weight", "bold")
       .style("fill", colors.text);
 
-    // 7. Relation Label (Small)
+    // 7. Relation
     node.append("text")
       .attr("dy", orientation === 'horizontal' ? "64" : "64")
       .style("text-anchor", "middle")
@@ -383,11 +392,11 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .style("font-size", "10px")
       .style("fill", colors.textSecondary);
       
-    // 8. Tag Indicators (Dots)
+    // 8. Tags
     node.each(function(d: d3.HierarchyPointNode<FamilyMember>) {
         if (d.data.tags && d.data.tags.length > 0) {
             d3.select(this).selectAll(".tag-dot")
-              .data(d.data.tags.slice(0, 3)) // Limit to 3
+              .data(d.data.tags.slice(0, 3))
               .enter().append("circle")
               .attr("class", "tag-dot")
               .attr("r", 3)
@@ -399,6 +408,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
   }, [data, dimensions, onNodeClick, selectedId, orientation, linkStyle, theme, highlightedIds, heatmapMode]);
 
+  // Handlers (handleZoom, handleFit, handleDownloadSVG) remain the same...
   const handleZoom = (factor: number) => {
       if (svgRef.current && zoomRef.current) {
           d3.select(svgRef.current)
@@ -430,13 +440,11 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       document.body.removeChild(link);
   };
 
-  // Define glass classes based on theme
   const glassClass = theme === 'dark' ? 'glass-panel-dark' : (theme === 'vintage' ? 'glass-panel-vintage' : 'glass-panel');
 
   return (
     <div ref={wrapperRef} className="w-full h-full rounded-2xl overflow-hidden relative">
       
-      {/* Quick Action Floating Menu */}
       {selectedId && selectedNodePos && onAddChild && onAddSibling && (
           <div 
             style={{ 
@@ -456,9 +464,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           </div>
       )}
 
-      {/* Controls */}
       <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
-          {/* Style Toggle */}
           <div className={`${glassClass} shadow-lg rounded-xl p-1 flex flex-col gap-1 backdrop-blur-md`}>
              <button onClick={() => setLinkStyle(prev => prev === 'curved' ? 'straight' : 'curved')} className={`p-2 rounded-lg transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50'}`} title="تغییر خطوط">
                   <GitMerge size={20} />
@@ -468,7 +474,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
              </button>
           </div>
 
-          {/* Zoom */}
           <div className={`${glassClass} shadow-lg rounded-xl p-1 flex flex-col gap-1 backdrop-blur-md`}>
               <button onClick={() => handleZoom(1.2)} className={`p-2 rounded-lg transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50'}`} title="بزرگنمایی">
                   <ZoomIn size={20} />
@@ -481,7 +486,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
               </button>
           </div>
 
-          {/* Export */}
           <div className={`${glassClass} shadow-lg rounded-xl p-1 backdrop-blur-md`}>
                <button onClick={handleDownloadSVG} className={`p-2 rounded-lg ${theme === 'dark' ? 'text-teal-400 hover:bg-white/10' : 'text-teal-600 hover:bg-white/50'}`} title="دانلود تصویر">
                   <ImageIcon size={20} />
