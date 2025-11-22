@@ -1,10 +1,11 @@
+
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { FamilyMember, AppTheme } from './types';
 import FamilyTree from './components/FamilyTree';
 import MemberPanel from './components/MemberPanel';
 import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, Cloud, CheckCircle2, RefreshCcw, Plus, Moon } from 'lucide-react';
 
-// Historical Context Data (Persian/World History)
+// Historical Context Data
 const historicalEvents = [
     { year: 1285, title: 'امضای فرمان مشروطیت' },
     { year: 1299, title: 'کودتای ۳ اسفند' },
@@ -16,7 +17,16 @@ const historicalEvents = [
     { year: 1367, title: 'پایان جنگ تحمیلی' },
 ];
 
-// --- Complex Initial Data (Default Factory Settings) ---
+// Helper to generate unique 6-char code
+const generateUniqueCode = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+};
+
 const defaultFamilyData: FamilyMember = {
   id: 'system_root',
   name: 'ریشه سیستم',
@@ -37,25 +47,171 @@ const defaultFamilyData: FamilyMember = {
   ]
 };
 
-// Helper to generate unique 6-char code
-const generateUniqueCode = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let result = '';
-    for (let i = 0; i < 6; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
+// --- PURE TREE LOGIC FUNCTIONS (Outside Component) ---
+
+const findNode = (node: FamilyMember, id: string): FamilyMember | null => {
+  if (node.id === id) return node;
+  if (node.children) {
+    for (const child of node.children) {
+      const found = findNode(child, id);
+      if (found) return found;
     }
-    return result;
+  }
+  return null;
 };
+
+const findParent = (root: FamilyMember, targetId: string): FamilyMember | null => {
+  if (root.children) {
+    for (const child of root.children) {
+      if (child.id === targetId) return root;
+      const found = findParent(child, targetId);
+      if (found) return found;
+    }
+  }
+  return null;
+};
+
+// Removes a node AND cleans up any connections pointing to it in the entire tree
+const removeNodeAndConnections = (root: FamilyMember, idToDelete: string): FamilyMember | null => {
+    // Recursive function to rebuild tree excluding the deleted node
+    // and filtering connections in preserved nodes
+    const rebuild = (node: FamilyMember): FamilyMember | null => {
+        if (node.id === idToDelete) return null;
+
+        let newChildren: FamilyMember[] | undefined = undefined;
+        if (node.children) {
+            newChildren = node.children
+                .map(child => rebuild(child))
+                .filter((child): child is FamilyMember => child !== null);
+        }
+
+        let newConnections = node.connections;
+        if (node.connections) {
+            // Remove any connection that points to the deleted ID
+            newConnections = node.connections.filter(c => c.targetId !== idToDelete);
+        }
+
+        return {
+            ...node,
+            children: newChildren,
+            connections: newConnections
+        };
+    };
+
+    return rebuild(root);
+};
+
+const updateNodeInTree = (node: FamilyMember, updated: FamilyMember): FamilyMember => {
+  if (node.id === updated.id) return updated;
+  if (node.children) {
+    return {
+      ...node,
+      children: node.children.map(child => updateNodeInTree(child, updated))
+    };
+  }
+  return node;
+};
+
+const addChildToNode = (node: FamilyMember, parentId: string): FamilyMember => {
+  if (node.id === parentId) {
+    const newChild: FamilyMember = {
+      id: Date.now().toString(),
+      name: 'فرزند جدید',
+      gender: 'male',
+      relation: 'Child',
+      code: generateUniqueCode(),
+      children: []
+    };
+    return {
+      ...node,
+      children: [...(node.children || []), newChild]
+    };
+  }
+  if (node.children) {
+    return {
+      ...node,
+      children: node.children.map(child => addChildToNode(child, parentId))
+    };
+  }
+  return node;
+};
+
+const addSiblingToNode = (root: FamilyMember, siblingId: string): FamilyMember => {
+    if (root.id === siblingId) {
+      alert("نمی‌توانید برای ریشه اصلی، هم‌سطح ایجاد کنید.");
+      return root;
+    }
+    const parent = findParent(root, siblingId);
+    if (parent) {
+       return addChildToNode(root, parent.id);
+    }
+    return root;
+};
+
+const addConnectionToNode = (node: FamilyMember, sourceId: string, targetId: string, label: string): FamilyMember => {
+    if (node.id === sourceId) {
+      const existing = node.connections || [];
+      if (existing.some(c => c.targetId === targetId)) return node;
+      return { ...node, connections: [...existing, { targetId, label }] };
+    }
+    if (node.children) {
+      return {
+        ...node,
+        children: node.children.map(child => addConnectionToNode(child, sourceId, targetId, label))
+      };
+    }
+    return node;
+};
+
+const removeConnectionFromNode = (node: FamilyMember, sourceId: string, targetId: string): FamilyMember => {
+    if (node.id === sourceId && node.connections) {
+      return {
+        ...node,
+        connections: node.connections.filter(c => c.targetId !== targetId)
+      };
+    }
+    if (node.children) {
+      return {
+        ...node,
+        children: node.children.map(child => removeConnectionFromNode(child, sourceId, targetId))
+      };
+    }
+    return node;
+};
+
+const getPathToRoot = (root: FamilyMember, targetId: string): FamilyMember[] | null => {
+    if (root.id === targetId) return [root];
+    if (root.children) {
+      for (const child of root.children) {
+        const path = getPathToRoot(child, targetId);
+        if (path) return [root, ...path];
+      }
+    }
+    return null;
+};
+
+const flattenTree = (node: FamilyMember): FamilyMember[] => {
+    let list = [node];
+    if (node.children) {
+      node.children.forEach(child => {
+        list = [...list, ...flattenTree(child)];
+      });
+    }
+    return list;
+};
+
+// --- MAIN COMPONENT ---
 
 const STORAGE_KEY = 'nasab_family_tree_autosave';
 
 const App: React.FC = () => {
   const [treeData, setTreeData] = useState<FamilyMember>(defaultFamilyData);
   
-  // Separate selection (for visual highlight/floating menu) from details (modal)
+  // Selection & Modal State
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [detailsMember, setDetailsMember] = useState<FamilyMember | null>(null);
 
+  // UI State
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>('horizontal');
@@ -66,12 +222,12 @@ const App: React.FC = () => {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Apply theme to body class
+  // Apply theme
   useEffect(() => {
       document.body.className = `theme-${theme}`;
   }, [theme]);
 
-  // --- AUTO LOAD ---
+  // Auto Load
   useEffect(() => {
       const savedData = localStorage.getItem(STORAGE_KEY);
       if (savedData) {
@@ -87,7 +243,7 @@ const App: React.FC = () => {
       }
   }, []);
 
-  // --- AUTO SAVE ---
+  // Auto Save
   useEffect(() => {
       setSaveStatus('saving');
       const timer = setTimeout(() => {
@@ -98,216 +254,139 @@ const App: React.FC = () => {
               setSaveStatus('unsaved');
               console.error('Auto-save failed', e);
           }
-      }, 1000); // Debounce save by 1 second
+      }, 1000);
 
       return () => clearTimeout(timer);
   }, [treeData]);
 
-  // Recursive helpers
-  const findNode = useCallback((node: FamilyMember, id: string): FamilyMember | null => {
-    if (node.id === id) return node;
-    if (node.children) {
-      for (const child of node.children) {
-        const found = findNode(child, id);
-        if (found) return found;
-      }
-    }
-    return null;
-  }, []);
-  
-  const findParent = useCallback((root: FamilyMember, targetId: string): FamilyMember | null => {
-    if (root.children) {
-      for (const child of root.children) {
-        if (child.id === targetId) return root;
-        const found = findParent(child, targetId);
-        if (found) return found;
-      }
-    }
-    return null;
+  const allMembers = useMemo(() => flattenTree(treeData), [treeData]);
+
+  // --- HANDLERS ---
+
+  const handleNodeClick = useCallback((member: FamilyMember) => {
+    setSelectedNodeId(member.id);
   }, []);
 
-  const updateNode = (node: FamilyMember, updated: FamilyMember): FamilyMember => {
-    if (node.id === updated.id) return updated;
-    if (node.children) {
-      return {
-        ...node,
-        children: node.children.map(child => updateNode(child, updated))
-      };
-    }
-    return node;
+  const handleOpenDetails = useCallback((member: FamilyMember) => {
+    setDetailsMember(member);
+  }, []);
+
+  const handleUpdateMember = (updatedMember: FamilyMember) => {
+    setTreeData(prev => updateNodeInTree(prev, updatedMember));
+    setDetailsMember(updatedMember);
   };
 
-  const addChildNode = (node: FamilyMember, parentId: string): FamilyMember => {
-    if (node.id === parentId) {
-      const newChild: FamilyMember = {
-        id: Date.now().toString(),
-        name: 'فرزند جدید',
-        gender: 'male',
-        relation: 'Child',
-        code: generateUniqueCode(),
-        children: []
-      };
-      return {
-        ...node,
-        children: [...(node.children || []), newChild]
-      };
-    }
-    if (node.children) {
-      return {
-        ...node,
-        children: node.children.map(child => addChildNode(child, parentId))
-      };
-    }
-    return node;
+  const handleAddChild = (parentId: string) => {
+    setTreeData(prev => addChildToNode(prev, parentId));
   };
 
-  const addSiblingNode = (root: FamilyMember, siblingId: string): FamilyMember => {
-    if (root.id === siblingId) {
-      alert("نمی‌توانید برای ریشه اصلی، هم‌سطح ایجاد کنید.");
-      return root;
-    }
-    const parent = findParent(root, siblingId);
-    if (parent) {
-       return addChildNode(root, parent.id);
-    }
-    return root;
+  const handleAddSibling = (siblingId: string) => {
+    setTreeData(prev => addSiblingToNode(prev, siblingId));
   };
 
-  const addParentToRoot = (currentRoot: FamilyMember) => {
-      const newClanRoot: FamilyMember = {
-          id: Date.now().toString(),
-          name: 'سرشاخه جدید',
-          gender: 'male',
-          relation: 'Root',
-          code: generateUniqueCode(),
-          children: []
-      };
-
-      if (currentRoot.relation === 'SystemRoot') {
-          const newTree = {
-              ...currentRoot,
-              children: [...(currentRoot.children || []), newClanRoot]
-          };
-          setTreeData(newTree);
-      } else {
-          // Wrap existing root in a system root
-          const newSystemRoot: FamilyMember = {
-            id: 'system_root',
-            name: 'System Root',
-            relation: 'SystemRoot',
+  const handleAddParent = () => {
+    setTreeData(prev => {
+        const newClanRoot: FamilyMember = {
+            id: Date.now().toString(),
+            name: 'سرشاخه جدید',
             gender: 'male',
-            children: [currentRoot, newClanRoot]
-          };
-          setTreeData(newSystemRoot);
-      }
+            relation: 'Root',
+            code: generateUniqueCode(),
+            children: []
+        };
+
+        if (prev.relation === 'SystemRoot') {
+            return {
+                ...prev,
+                children: [...(prev.children || []), newClanRoot]
+            };
+        } else {
+            return {
+                id: 'system_root',
+                name: 'System Root',
+                relation: 'SystemRoot',
+                gender: 'male',
+                children: [prev, newClanRoot]
+            };
+        }
+    });
+  };
+  
+  const handleDeleteMember = (id: string) => {
+    if (id === treeData.id) { 
+        alert("برای حذف ریشه اصلی سیستم، لطفا از دکمه شروع تازه استفاده کنید."); 
+        return; 
+    }
+    
+    const newTree = removeNodeAndConnections(treeData, id);
+    
+    if (newTree) { 
+        setTreeData(newTree); 
+        // Close modal and clear selection if the deleted member was active
+        if (detailsMember?.id === id) setDetailsMember(null);
+        if (selectedNodeId === id) setSelectedNodeId(null);
+    } else {
+        // If newTree is null, it means the system root was somehow deleted (unlikely due to id check)
+        alert("خطا در حذف عضو.");
+    }
   };
 
-  const deleteNode = (node: FamilyMember, idToDelete: string): FamilyMember | null => {
-    if (node.id === idToDelete) return null;
-    if (node.children) {
-      return {
-        ...node,
-        children: node.children
-          .map(child => deleteNode(child, idToDelete))
-          .filter((child): child is FamilyMember => child !== null)
-      };
-    }
-    return node;
+  const handleAddConnection = (sourceId: string, targetId: string, label: string) => {
+    setTreeData(prev => addConnectionToNode(prev, sourceId, targetId, label));
+    // Update modal if needed
+    const updatedSource = findNode(addConnectionToNode(treeData, sourceId, targetId, label), sourceId);
+    if (updatedSource && detailsMember?.id === sourceId) setDetailsMember(updatedSource);
   };
 
-  const addConnectionNode = (node: FamilyMember, sourceId: string, targetId: string, label: string): FamilyMember => {
-    if (node.id === sourceId) {
-      const existing = node.connections || [];
-      if (existing.some(c => c.targetId === targetId)) return node;
-      return { ...node, connections: [...existing, { targetId, label }] };
-    }
-    if (node.children) {
-      return {
-        ...node,
-        children: node.children.map(child => addConnectionNode(child, sourceId, targetId, label))
-      };
-    }
-    return node;
-  };
-
-  const removeConnectionNode = (node: FamilyMember, sourceId: string, targetId: string): FamilyMember => {
-    if (node.id === sourceId && node.connections) {
-      return {
-        ...node,
-        connections: node.connections.filter(c => c.targetId !== targetId)
-      };
-    }
-    if (node.children) {
-      return {
-        ...node,
-        children: node.children.map(child => removeConnectionNode(child, sourceId, targetId))
-      };
-    }
-    return node;
+  const handleRemoveConnection = (sourceId: string, targetId: string) => {
+    setTreeData(prev => removeConnectionFromNode(prev, sourceId, targetId));
+    // Update modal if needed
+    const updatedSource = findNode(removeConnectionFromNode(treeData, sourceId, targetId), sourceId);
+    if (updatedSource && detailsMember?.id === sourceId) setDetailsMember(updatedSource);
   };
 
   const handleAddSpouse = (memberId: string, existingSpouseId?: string) => {
-      if (existingSpouseId) {
-          let newTree = addConnectionNode(treeData, memberId, existingSpouseId, 'همسر');
-          newTree = addConnectionNode(newTree, existingSpouseId, memberId, 'همسر');
-          setTreeData(newTree);
-          alert("ازدواج فامیلی ثبت شد.");
-      } else {
-          const member = findNode(treeData, memberId);
-          const spouseGender = member?.gender === 'male' ? 'female' : 'male';
-          const spouseName = member?.gender === 'male' ? 'همسر (خانم)' : 'همسر (آقا)';
-          
-          const newSpouse: FamilyMember = {
-              id: Date.now().toString(),
-              name: spouseName,
-              gender: spouseGender,
-              relation: 'Spouse',
-              code: generateUniqueCode(),
-              children: [] 
-          };
-
-          let newTree = treeData;
-          if (treeData.relation === 'SystemRoot') {
-               newTree = {
-                   ...treeData,
-                   children: [...(treeData.children || []), newSpouse]
-               };
+      setTreeData(prev => {
+          let newTree = prev;
+          if (existingSpouseId) {
+              newTree = addConnectionToNode(newTree, memberId, existingSpouseId, 'همسر');
+              newTree = addConnectionToNode(newTree, existingSpouseId, memberId, 'همسر');
+              alert("ازدواج فامیلی ثبت شد.");
           } else {
-              newTree = {
-                  id: 'system_root_auto',
-                  relation: 'SystemRoot',
-                  name: 'System',
-                  gender: 'male',
-                  children: [treeData, newSpouse]
+              const member = findNode(newTree, memberId);
+              const spouseGender = member?.gender === 'male' ? 'female' : 'male';
+              const spouseName = member?.gender === 'male' ? 'همسر (خانم)' : 'همسر (آقا)';
+              
+              const newSpouse: FamilyMember = {
+                  id: Date.now().toString(),
+                  name: spouseName,
+                  gender: spouseGender,
+                  relation: 'Spouse',
+                  code: generateUniqueCode(),
+                  children: [] 
               };
+
+              // Attach new spouse to system root to make it a "Forest" node
+              if (newTree.relation === 'SystemRoot') {
+                   newTree = {
+                       ...newTree,
+                       children: [...(newTree.children || []), newSpouse]
+                   };
+              } else {
+                  // Wrap single root into system root if not already
+                  newTree = {
+                      id: 'system_root_auto',
+                      relation: 'SystemRoot',
+                      name: 'System',
+                      gender: 'male',
+                      children: [newTree, newSpouse]
+                  };
+              }
+              newTree = addConnectionToNode(newTree, memberId, newSpouse.id, 'همسر');
+              newTree = addConnectionToNode(newTree, newSpouse.id, memberId, 'همسر');
           }
-          newTree = addConnectionNode(newTree, memberId, newSpouse.id, 'همسر');
-          newTree = addConnectionNode(newTree, newSpouse.id, memberId, 'همسر');
-          setTreeData(newTree);
-      }
-  };
-
-  const flattenTree = (node: FamilyMember): FamilyMember[] => {
-    let list = [node];
-    if (node.children) {
-      node.children.forEach(child => {
-        list = [...list, ...flattenTree(child)];
+          return newTree;
       });
-    }
-    return list;
-  };
-
-  const allMembers = useMemo(() => flattenTree(treeData), [treeData]);
-
-  const getPathToRoot = (root: FamilyMember, targetId: string): FamilyMember[] | null => {
-    if (root.id === targetId) return [root];
-    if (root.children) {
-      for (const child of root.children) {
-        const path = getPathToRoot(child, targetId);
-        if (path) return [root, ...path];
-      }
-    }
-    return null;
   };
 
   const calculateRelationship = (id1: string, id2: string): string => {
@@ -397,58 +476,6 @@ const App: React.FC = () => {
       setHighlightedIds(idsToHighlight);
   };
 
-  // This just selects the node in the UI (shows ring, floating menu)
-  const handleNodeClick = useCallback((member: FamilyMember) => {
-    setSelectedNodeId(member.id);
-  }, []);
-
-  // This opens the modal
-  const handleOpenDetails = useCallback((member: FamilyMember) => {
-    setDetailsMember(member);
-  }, []);
-
-  const handleUpdateMember = (updatedMember: FamilyMember) => {
-    const newTree = updateNode(treeData, updatedMember);
-    setTreeData(newTree);
-    setDetailsMember(updatedMember); // Keep modal open with updated data
-  };
-
-  const handleAddChild = (parentId: string) => {
-    const newTree = addChildNode(treeData, parentId);
-    setTreeData(newTree);
-  };
-
-  const handleAddSibling = (siblingId: string) => {
-    const newTree = addSiblingNode(treeData, siblingId);
-    setTreeData(newTree);
-  };
-
-  const handleAddParent = () => addParentToRoot(treeData);
-  
-  const handleDeleteMember = (id: string) => {
-    if (id === treeData.id) { alert("برای حذف ریشه اصلی، لطفا صفحه را رفرش کنید."); return; }
-    const newTree = deleteNode(treeData, id);
-    if (newTree) { 
-        setTreeData(newTree); 
-        setDetailsMember(null); 
-        setSelectedNodeId(null); 
-    }
-  };
-
-  const handleAddConnection = (sourceId: string, targetId: string, label: string) => {
-    const newTree = addConnectionNode(treeData, sourceId, targetId, label);
-    setTreeData(newTree);
-    const updatedSource = findNode(newTree, sourceId);
-    if (updatedSource) setDetailsMember(updatedSource);
-  };
-
-  const handleRemoveConnection = (sourceId: string, targetId: string) => {
-    const newTree = removeConnectionNode(treeData, sourceId, targetId);
-    setTreeData(newTree);
-    const updatedSource = findNode(newTree, sourceId);
-    if (updatedSource) setDetailsMember(updatedSource);
-  };
-
   const handleExportJSON = () => {
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2));
       const downloadAnchorNode = document.createElement('a');
@@ -468,7 +495,12 @@ const App: React.FC = () => {
       reader.onload = (e) => {
           try {
               const json = JSON.parse(e.target?.result as string);
-              if(json.id && json.name) { setTreeData(json); setDetailsMember(null); setSelectedNodeId(null); alert("شجره‌نامه بارگذاری شد."); } 
+              if(json.id && json.name) { 
+                  setTreeData(json); 
+                  setDetailsMember(null); 
+                  setSelectedNodeId(null); 
+                  alert("شجره‌نامه بارگذاری شد."); 
+              } 
               else alert("فایل نامعتبر است.");
           } catch (err) { alert("خطا در خواندن فایل."); }
       };
@@ -485,7 +517,7 @@ const App: React.FC = () => {
       }
   }
 
-  const glassClass = theme === 'dark' ? 'glass-panel-dark' : (theme === 'vintage' ? 'glass-panel-vintage' : 'glass-panel');
+  const glassClass = theme === 'dark' ? 'glass-panel-dark' : 'glass-panel';
 
   return (
     <div className={`flex h-screen w-screen overflow-hidden transition-colors duration-500 relative ${theme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>
@@ -496,11 +528,11 @@ const App: React.FC = () => {
       <header className={`absolute top-0 left-0 right-0 ${glassClass} border-b-0 rounded-b-2xl mx-4 mt-2 px-4 py-3 flex justify-between items-center shadow-lg z-20 transition-all animate-fade-in-scale`}>
         <div className="flex items-center gap-4 lg:gap-6">
            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg ${theme === 'vintage' ? 'bg-[#cb4b16]' : 'bg-gradient-to-br from-teal-500 to-teal-700'}`}>
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg bg-gradient-to-br from-teal-500 to-teal-700`}>
                   <span className="text-xl">🌳</span> 
               </div>
               <div className="flex flex-col">
-                  <h1 className={`text-lg font-bold tracking-tight leading-none ${theme === 'vintage' ? 'font-serif text-[#b58900]' : ''}`}>نسب‌نما</h1>
+                  <h1 className="text-lg font-bold tracking-tight leading-none">نسب‌نما</h1>
                   <div className="flex items-center gap-1 text-[10px] tracking-wider opacity-70">
                       {saveStatus === 'saving' && <><RefreshCcw size={10} className="animate-spin"/> در حال ذخیره...</>}
                       {saveStatus === 'saved' && <><CheckCircle2 size={10} className="text-teal-500"/> ذخیره شد</>}
@@ -509,7 +541,7 @@ const App: React.FC = () => {
               </div>
            </div>
            
-           <button onClick={() => addParentToRoot(treeData)} className="hidden md:flex items-center gap-2 bg-teal-500/10 hover:bg-teal-500/20 text-teal-600 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
+           <button onClick={handleAddParent} className="hidden md:flex items-center gap-2 bg-teal-500/10 hover:bg-teal-500/20 text-teal-600 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">
                <Plus size={14} /> ایجاد خاندان جدید
            </button>
            
@@ -591,10 +623,10 @@ const App: React.FC = () => {
 
       {/* Modal / Popup for Member Details */}
       {detailsMember && (
-        <div className="fixed inset-0 z-10 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-enter" onClick={() => setDetailsMember(null)}>
+        <div className="fixed inset-0 z-20 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-enter" onClick={() => setDetailsMember(null)}>
             <div 
               className={`w-full max-w-4xl h-[85vh] shadow-2xl rounded-2xl overflow-hidden transform transition-all relative ${theme === 'dark' ? 'bg-slate-900' : 'bg-white'}`}
-              onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+              onClick={(e) => e.stopPropagation()}
             >
                 <MemberPanel 
                   member={detailsMember} 

@@ -58,9 +58,8 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
   const [calcResult, setCalcResult] = useState<string | null>(null);
   
   const isDark = document.body.classList.contains('theme-dark');
-  const isVintage = document.body.classList.contains('theme-vintage');
   
-  const cardClass = isDark ? 'glass-card-dark text-slate-200' : (isVintage ? 'glass-panel-vintage' : 'glass-card');
+  const cardClass = isDark ? 'glass-card-dark text-slate-200' : 'glass-card';
   const inputClass = isDark 
     ? "w-full p-2 rounded-lg border border-slate-600 bg-slate-800/50 text-sm outline-none focus:ring-2 focus:ring-teal-500/50" 
     : "w-full p-2 rounded-lg border border-slate-200 bg-white/50 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500";
@@ -190,6 +189,14 @@ ${formData.bio || '---'}
           alert('کد کپی شد');
       }
   }
+  
+  const handleDeleteClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if(window.confirm('آیا از حذف این عضو و تمام زیرمجموعه‌هایش اطمینان دارید؟ این عملیات غیرقابل بازگشت است.')) {
+          onDeleteMember(member.id);
+          onClose();
+      }
+  };
 
   return (
     <div className={`w-full h-full flex flex-col overflow-hidden relative rounded-2xl ${isDark ? 'glass-panel-dark' : 'glass-panel'}`}>
@@ -644,7 +651,7 @@ ${formData.bio || '---'}
                     
                     <div className={`${cardClass} p-6 rounded-2xl border-red-100`}>
                         <h4 className="text-xs font-bold opacity-50 mb-4 uppercase tracking-wider text-red-400">منطقه خطر</h4>
-                        <button onClick={() => { if(window.confirm('آیا از حذف این عضو و تمام زیرمجموعه‌هایش اطمینان دارید؟ این عملیات غیرقابل بازگشت است.')) onDeleteMember(member.id); }} className="w-full py-4 bg-red-50/50 text-red-600 border border-red-100 rounded-2xl text-sm font-bold hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2 shadow-sm">
+                        <button onClick={handleDeleteClick} className="w-full py-4 bg-red-50/50 text-red-600 border border-red-100 rounded-2xl text-sm font-bold hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2 shadow-sm">
                            <Trash2 size={18}/> حذف دائمی عضو و زیرشاخه‌ها
                         </button>
                     </div>
