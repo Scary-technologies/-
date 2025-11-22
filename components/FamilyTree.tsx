@@ -619,7 +619,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                 position: 'absolute', 
                 left: selectedNodePos.x + 50, 
                 top: selectedNodePos.y - 30,
-                zIndex: 100 // Higher index to float above SVG but below Modal
+                zIndex: 1 // Higher index to float above SVG but below Modal
             }}
             className="flex flex-col gap-2 animate-in fade-in zoom-in duration-200"
           >

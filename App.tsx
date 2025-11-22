@@ -1,9 +1,8 @@
-
 import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { FamilyMember, AppTheme } from './types';
 import FamilyTree from './components/FamilyTree';
 import MemberPanel from './components/MemberPanel';
-import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, Cloud, CheckCircle2, RefreshCcw, Plus } from 'lucide-react';
+import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, Cloud, CheckCircle2, RefreshCcw, Plus, Moon } from 'lucide-react';
 
 // Historical Context Data (Persian/World History)
 const historicalEvents = [
@@ -552,9 +551,9 @@ const App: React.FC = () => {
            
            {/* Theme Toggles */}
            <div className={`flex p-1 rounded-lg border ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white/40 border-white/50'}`}>
-               {['modern', 'vintage', 'dark'].map((t) => (
+               {['modern', 'dark'].map((t) => (
                    <button key={t} onClick={() => setTheme(t as AppTheme)} className={`p-2 rounded-md transition-all ${theme === t ? 'bg-white/80 shadow text-teal-600' : 'opacity-50 hover:opacity-100'}`}>
-                       {t === 'modern' ? <Palette size={16}/> : (t === 'vintage' ? '📜' : '🌙')}
+                       {t === 'modern' ? <Palette size={16}/> : <Moon size={16}/>}
                    </button>
                ))}
            </div>
@@ -592,7 +591,7 @@ const App: React.FC = () => {
 
       {/* Modal / Popup for Member Details */}
       {detailsMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-enter" onClick={() => setDetailsMember(null)}>
+        <div className="fixed inset-0 z-10 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-enter" onClick={() => setDetailsMember(null)}>
             <div 
               className={`w-full max-w-4xl h-[85vh] shadow-2xl rounded-2xl overflow-hidden transform transition-all relative ${theme === 'dark' ? 'bg-slate-900' : 'bg-white'}`}
               onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
