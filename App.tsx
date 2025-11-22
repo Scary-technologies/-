@@ -753,7 +753,7 @@ const App: React.FC = () => {
 
       {/* Sidebar Panel */}
       {(!isFullScreen || isPanelOpen) && (
-      <div className={`fixed inset-y-0 left-0 w-full md:w-[28rem] shadow-2xl transform transition-transform duration-500 cubic-bezier(0.32, 0.72, 0, 1) z-40 ${isPanelOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 border-r flex flex-col ${theme === 'dark' ? 'glass-panel-dark border-slate-700' : 'glass-panel border-white/40'}`}>
+      <div className={`fixed inset-y-0 left-0 w-full md:w-[28rem] shadow-2xl transform transition-all duration-500 cubic-bezier(0.25, 0.8, 0.25, 1) z-40 ${isPanelOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-90'} md:relative md:translate-x-0 border-r flex flex-col ${theme === 'dark' ? 'glass-panel-dark border-slate-700' : 'glass-panel border-white/40'}`}>
         <div className="absolute top-4 left-4 md:hidden z-50">
            <button onClick={() => setIsPanelOpen(false)} className="p-2 bg-white/80 backdrop-blur rounded-full shadow-lg"><X size={20} /></button>
         </div>

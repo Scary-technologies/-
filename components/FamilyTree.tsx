@@ -258,7 +258,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr("stroke", colors.linkExtra) 
       .attr("stroke-width", "2px")
       .attr("stroke-dasharray", "5,5")
-      .attr("opacity", (d) => {
+      .attr("opacity", (d: any) => {
          if (!hasHighlight) return 0.6;
          const srcHi = highlightedIds.has(d.source.data.id);
          const tgtHi = highlightedIds.has(d.target.data.id);
@@ -314,9 +314,67 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
          return highlightedIds.has(d.data.id) ? 1 : 0.2; 
       })
       .style("transition", "opacity 0.4s ease")
-      .style("pointer-events", (d: d3.HierarchyPointNode<FamilyMember>) => d.data.relation === 'SystemRoot' ? 'none' : 'all');
+      .style("pointer-events", (d: d3.HierarchyPointNode<FamilyMember>) => d.data.relation === 'SystemRoot' ? 'none' : 'all')
+      // --- Hover Effects ---
+      .on("mouseenter", function(event, d: d3.HierarchyPointNode<FamilyMember>) {
+          if (d.data.relation === 'SystemRoot') return;
+          
+          const group = d3.select(this);
+          
+          // Scale background circle
+          group.select(".node-bg")
+            .transition().duration(300).ease(d3.easeBackOut)
+            .attr("r", 32)
+            .style("filter", "drop-shadow(0 8px 16px rgba(0,0,0,0.2))")
+            .attr("stroke-width", "3px");
 
-    // ... [Rest of the drawing logic remains mostly the same] ...
+          // Scale image
+          group.select(".node-img")
+            .transition().duration(300).ease(d3.easeBackOut)
+            .attr("x", -32).attr("y", -32)
+            .attr("width", 64).attr("height", 64);
+            
+          // Lift label group
+          group.select(".node-label-rect")
+            .transition().duration(300)
+            .attr("y", orientation === 'horizontal' ? 38 : 38);
+            
+          group.select(".node-label-text")
+             .transition().duration(300)
+             .attr("dy", orientation === 'horizontal' ? "55" : "55");
+
+          group.select(".node-label-sub")
+             .transition().duration(300)
+             .attr("dy", orientation === 'horizontal' ? "70" : "70");
+      })
+      .on("mouseleave", function(event, d: d3.HierarchyPointNode<FamilyMember>) {
+          if (d.data.relation === 'SystemRoot') return;
+          
+          const group = d3.select(this);
+          
+          group.select(".node-bg")
+            .transition().duration(300).ease(d3.easeCubicOut)
+            .attr("r", 26)
+            .style("filter", null)
+            .attr("stroke-width", "2px");
+
+          group.select(".node-img")
+            .transition().duration(300).ease(d3.easeCubicOut)
+            .attr("x", -26).attr("y", -26)
+            .attr("width", 52).attr("height", 52);
+            
+          group.select(".node-label-rect")
+            .transition().duration(300)
+            .attr("y", orientation === 'horizontal' ? 32 : 32);
+
+          group.select(".node-label-text")
+             .transition().duration(300)
+             .attr("dy", orientation === 'horizontal' ? "49" : "49");
+
+          group.select(".node-label-sub")
+             .transition().duration(300)
+             .attr("dy", orientation === 'horizontal' ? "64" : "64");
+      });
 
     // 1. Selected State Ring
     node.filter((d: d3.HierarchyPointNode<FamilyMember>) => d.data.id === selectedId)
@@ -330,6 +388,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     // 2. Main Circle Background
     node.append("circle")
+      .attr("class", "node-bg")
       .attr("r", 26)
       .style("fill", (d: d3.HierarchyPointNode<FamilyMember>) => {
           if (heatmapMode) {
@@ -347,13 +406,14 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
              defs.append("clipPath")
                 .attr("id", "clip-circle-" + i)
                 .append("circle")
-                .attr("r", 26); 
+                .attr("r", 26); // Match original radius
         }
     });
 
     // 4. Image
     node.filter((d: d3.HierarchyPointNode<FamilyMember>) => !!d.data.imageUrl && !heatmapMode)
         .append("image")
+        .attr("class", "node-img")
         .attr("xlink:href", (d: d3.HierarchyPointNode<FamilyMember>) => d.data.imageUrl || '')
         .attr("x", -26)
         .attr("y", -26)
@@ -364,6 +424,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     // 5. Label Background
     node.append("rect")
+      .attr("class", "node-label-rect")
       .attr("rx", 4)
       .attr("ry", 4)
       .attr("width", 110)
@@ -375,6 +436,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     // 6. Name
     node.append("text")
+      .attr("class", "node-label-text")
       .attr("dy", orientation === 'horizontal' ? "49" : "49")
       .style("text-anchor", "middle")
       .text((d: d3.HierarchyPointNode<FamilyMember>) => d.data.name)
@@ -385,6 +447,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     // 7. Relation
     node.append("text")
+      .attr("class", "node-label-sub")
       .attr("dy", orientation === 'horizontal' ? "64" : "64")
       .style("text-anchor", "middle")
       .text((d: d3.HierarchyPointNode<FamilyMember>) => d.data.relation || '')
