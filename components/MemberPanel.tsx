@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FamilyMember, LifeEvent, Tag, VoiceNote } from '../types';
 import { generateBiography } from '../services/geminiService';
-import { User, Calendar, MapPin, Sparkles, Plus, Trash2, Save, Calculator, ArrowUp, GitBranch, Camera, Briefcase, Settings, Network, Flag, Eye, EyeOff, Route, Image as ImageIcon, Mic, Tag as TagIcon, FileText, Play, X, Heart, HeartHandshake, Copy } from 'lucide-react';
+import { User, Calendar, MapPin, Sparkles, Plus, Trash2, Save, Calculator, ArrowUp, GitBranch, Camera, Briefcase, Settings, Network, Flag, Eye, EyeOff, Route, Image as ImageIcon, Mic, Tag as TagIcon, FileText, Play, X, Heart, HeartHandshake, Copy, Printer, ExternalLink } from 'lucide-react';
 
 interface MemberPanelProps {
   member: FamilyMember | null;
@@ -17,6 +17,7 @@ interface MemberPanelProps {
   calculateRelationship: (id1: string, id2: string) => string;
   onHighlightPath: (memberId: string, direction: 'ancestors' | 'descendants' | 'reset') => void;
   onAddSpouse: (memberId: string, existingSpouseId?: string) => void;
+  onClose: () => void;
 }
 
 type Tab = 'info' | 'events' | 'bio' | 'gallery' | 'relations' | 'settings';
@@ -33,7 +34,8 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
   onRemoveConnection,
   calculateRelationship,
   onHighlightPath,
-  onAddSpouse
+  onAddSpouse,
+  onClose
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('info');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -73,24 +75,7 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
     }
   }, [member]);
 
-  if (!member) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center p-8 text-center animate-enter">
-        <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-4 animate-pulse ${isDark ? 'bg-slate-800 text-slate-500' : 'bg-white/50 text-slate-400 shadow-lg'}`}>
-            <Network size={48} className="opacity-50"/>
-        </div>
-        <p className="text-lg font-medium opacity-70">عضوی انتخاب نشده است</p>
-        <p className="text-sm mt-2 opacity-50">برای مشاهده جزئیات، روی یکی از افراد در نمودار کلیک کنید.</p>
-        <div className="mt-8 pt-8 border-t border-dashed border-current opacity-20 w-full max-w-xs"></div>
-        <button 
-            onClick={onAddParent} 
-            className="mt-4 w-full max-w-xs py-3 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-500 hover:to-teal-400 text-white rounded-xl shadow-lg shadow-teal-500/20 transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
-        >
-            <Plus size={18}/> ایجاد خاندان جدید
-        </button>
-      </div>
-    );
-  }
+  if (!member) return null;
 
   const handleSave = () => {
     if (formData.id) {
@@ -207,107 +192,115 @@ ${formData.bio || '---'}
   }
 
   return (
-    <div className="h-full flex flex-col backdrop-blur-xl bg-transparent overflow-y-auto custom-scrollbar relative">
+    <div className={`w-full h-full flex flex-col overflow-hidden relative rounded-2xl ${isDark ? 'glass-panel-dark' : 'glass-panel'}`}>
+      
       {/* Hero Header */}
-      <div className={`relative h-40 ${member.gender === 'male' ? 'bg-gradient-to-r from-blue-600/80 to-blue-400/80' : 'bg-gradient-to-r from-pink-600/80 to-pink-400/80'} shrink-0 overflow-hidden`}>
-         <div className="absolute inset-0 opacity-30 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] mix-blend-overlay"></div>
-         <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent"></div>
+      <div className={`relative h-48 shrink-0 overflow-hidden ${member.gender === 'male' ? 'bg-gradient-to-br from-slate-800 to-blue-900' : 'bg-gradient-to-br from-slate-800 to-pink-900'}`}>
+         {/* Background Pattern */}
+         <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] mix-blend-overlay"></div>
+         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
          
-         <div className="absolute -bottom-12 right-6 flex items-end z-10">
-             <div className="relative group">
-                <div className={`w-28 h-28 rounded-2xl border-4 ${isDark ? 'border-slate-800' : 'border-white'} shadow-xl overflow-hidden bg-white/10 backdrop-blur-md`}>
+         {/* Close Button */}
+         <button onClick={onClose} className="absolute top-4 left-4 z-20 text-white/70 hover:text-white bg-black/20 hover:bg-red-500/80 p-2 rounded-full backdrop-blur-md transition-all">
+             <X size={20} />
+         </button>
+
+         {/* Actions */}
+         <div className="absolute top-4 right-4 z-20 flex gap-2">
+             <button onClick={() => setEditMode(!editMode)} className="text-white/80 hover:text-white bg-black/20 hover:bg-white/20 p-2 rounded-full backdrop-blur-md transition-all" title="ویرایش">
+                {editMode ? <Save size={18} onClick={handleSave}/> : <Settings size={18}/>}
+             </button>
+             <button onClick={handlePrint} className="text-white/80 hover:text-white bg-black/20 hover:bg-white/20 p-2 rounded-full backdrop-blur-md transition-all" title="چاپ">
+                <Printer size={18}/>
+             </button>
+         </div>
+
+         {/* Profile Content */}
+         <div className="absolute bottom-0 left-0 w-full p-6 flex items-end gap-6 z-10">
+             <div className="relative group shrink-0">
+                <div className={`w-32 h-32 rounded-2xl border-4 ${isDark ? 'border-slate-800' : 'border-white/20'} shadow-2xl overflow-hidden bg-white/10 backdrop-blur-sm`}>
                     {formData.imageUrl ? (
                         <img src={formData.imageUrl} alt={formData.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                     ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-white/20 text-white/80">
-                            <User size={48} />
+                        <div className="w-full h-full flex items-center justify-center bg-white/10 text-white/50">
+                            <User size={56} />
                         </div>
                     )}
                 </div>
                 {editMode && (
-                    <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-2 left-2 p-1.5 bg-black/60 text-white rounded-full hover:bg-black/80 backdrop-blur-sm transition-transform hover:scale-110">
+                    <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-2 left-2 p-2 bg-teal-600 text-white rounded-full hover:bg-teal-500 shadow-lg backdrop-blur-sm transition-transform hover:scale-110">
                         <Camera size={16} />
                     </button>
                 )}
                 <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => handleUploadImage(e)} accept="image/*" />
              </div>
-         </div>
-         
-         <div className="absolute top-4 right-4 text-white/90 cursor-pointer hover:text-white transition-colors p-2 hover:bg-white/10 rounded-full" onClick={() => setEditMode(!editMode)}>
-            {editMode ? <Save size={20} onClick={handleSave}/> : <Settings size={20}/>}
-         </div>
-         
-         <div onClick={copyCode} className="absolute top-4 left-4 text-white/80 font-mono text-xs bg-black/20 px-2 py-1 rounded-md backdrop-blur-sm flex items-center gap-2 cursor-pointer hover:bg-black/30">
-            <Copy size={10}/> {formData.code || 'NO-CODE'}
+             
+             <div className="flex-1 pb-2">
+                  <div className="flex items-center gap-3 mb-1">
+                      {editMode ? (
+                          <input 
+                            className="text-3xl font-bold bg-transparent border-b border-white/30 text-white w-full outline-none focus:border-teal-400"
+                            value={formData.name}
+                            onChange={(e) => handleChange('name', e.target.value)}
+                          />
+                      ) : (
+                          <h2 className="text-3xl font-black text-white drop-shadow-md">{formData.name}</h2>
+                      )}
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-2 items-center text-white/80 text-sm">
+                      <span className="bg-black/30 px-2 py-0.5 rounded backdrop-blur-md flex items-center gap-1">
+                          <Calendar size={12}/> {formData.birthDate || '؟'}
+                      </span>
+                      {formData.occupation && (
+                          <span className="bg-black/30 px-2 py-0.5 rounded backdrop-blur-md flex items-center gap-1">
+                              <Briefcase size={12}/> {formData.occupation}
+                          </span>
+                      )}
+                      <div onClick={copyCode} className="bg-white/10 px-2 py-0.5 rounded backdrop-blur-md flex items-center gap-1 cursor-pointer hover:bg-white/20 font-mono" title="کپی کد">
+                          <Copy size={10}/> {formData.code}
+                      </div>
+                  </div>
+             </div>
          </div>
       </div>
 
-      {/* Name & Meta */}
-      <div className={`pt-14 px-6 pb-4 border-b ${isDark ? 'border-slate-700' : 'border-slate-100/50'}`}>
-          {editMode ? (
-              <input 
-                className={`text-2xl font-bold w-full border-b border-slate-300 focus:border-teal-500 outline-none bg-transparent mb-1 ${isDark ? 'text-white' : 'text-slate-800'}`}
-                value={formData.name}
-                onChange={(e) => handleChange('name', e.target.value)}
-              />
-          ) : (
-              <h2 className={`text-2xl font-black ${isDark ? 'text-slate-100' : 'text-slate-800'}`}>{formData.name}</h2>
-          )}
-          
-          <div className="flex flex-wrap gap-2 mt-2">
-             <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md shadow-sm ${isDark ? 'bg-slate-800 text-slate-300' : 'bg-white/60 text-slate-600'}`}>
-                <Calendar size={12}/> {formData.birthDate || '؟'} - {formData.deathDate || (editMode ? '' : 'اکنون')}
-             </span>
-             {formData.occupation && (
-                 <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md border shadow-sm ${isDark ? 'bg-amber-900/30 text-amber-400 border-amber-900/50' : 'bg-amber-50/80 text-amber-700 border-amber-100'}`}>
-                    <Briefcase size={12}/> {formData.occupation}
-                 </span>
-             )}
-             {formData.tags?.map(tag => (
-                 <span key={tag.id} style={{backgroundColor: tag.color + 'aa'}} className="text-white text-[10px] px-2 py-1 rounded-full flex items-center gap-1 shadow-sm backdrop-blur-sm">
-                    {tag.label} 
-                    {editMode && <X size={10} className="cursor-pointer" onClick={() => handleChange('tags', formData.tags?.filter(t => t.id !== tag.id))} />}
-                 </span>
-             ))}
-          </div>
-      </div>
-
-      {/* Tabs - Sticky Position */}
-      <div className={`flex border-b overflow-x-auto no-scrollbar px-2 sticky top-0 z-30 backdrop-blur-xl ${isDark ? 'bg-slate-900/80 border-slate-700' : 'bg-white/80 border-slate-200/50'}`}>
+      {/* Tabs */}
+      <div className={`flex border-b overflow-x-auto no-scrollbar px-4 pt-2 sticky top-0 z-30 ${isDark ? 'bg-slate-900/90 border-slate-700' : 'bg-white/90 border-slate-200'}`}>
           {[
-              {id: 'info', label: 'اطلاعات', icon: User},
+              {id: 'info', label: 'اطلاعات پایه', icon: User},
               {id: 'bio', label: 'سرگذشت', icon: FileText},
-              {id: 'events', label: 'رویدادها', icon: Route},
+              {id: 'events', label: 'تایم‌لاین', icon: Route},
               {id: 'gallery', label: 'نگارخانه', icon: ImageIcon},
               {id: 'relations', label: 'روابط', icon: Network},
-              {id: 'settings', label: 'ابزارها', icon: Settings},
+              {id: 'settings', label: 'تنظیمات', icon: Settings},
           ].map(tab => (
               <button 
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as Tab)}
-                className={`relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all whitespace-nowrap ${
+                className={`relative flex items-center gap-2 px-5 py-4 text-sm font-bold transition-all whitespace-nowrap outline-none ${
                     activeTab === tab.id 
                     ? (isDark ? 'text-teal-400' : 'text-teal-700') 
-                    : (isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800')
+                    : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-700')
                 }`}
               >
-                 <tab.icon size={16} /> {tab.label}
+                 <tab.icon size={18} className={activeTab === tab.id ? "scale-110" : ""} /> {tab.label}
                  {activeTab === tab.id && (
-                     <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-teal-500 to-transparent"></span>
+                     <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-teal-400 to-teal-600 rounded-t-full"></span>
                  )}
               </button>
           ))}
       </div>
 
-      {/* Content Area */}
-      <div className="p-6 pb-20">
+      {/* Content Scroll Area */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-transparent">
           
           {/* INFO TAB */}
           {activeTab === 'info' && (
-              <div className="space-y-5 animate-enter">
-                  <div className="grid grid-cols-2 gap-4">
-                      <div className={`p-3 rounded-xl ${cardClass}`}>
-                          <label className="text-xs font-bold opacity-50 block mb-1">جنسیت</label>
+              <div className="space-y-6 animate-enter">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className={`p-4 rounded-2xl ${cardClass}`}>
+                          <label className="text-xs font-bold opacity-50 block mb-2 uppercase tracking-wider">جنسیت</label>
                           {editMode ? (
                               <select 
                                 className={`${inputClass} cursor-pointer`}
@@ -318,53 +311,58 @@ ${formData.bio || '---'}
                                   <option value="female">زن</option>
                               </select>
                           ) : (
-                              <div className="font-medium">{formData.gender === 'male' ? 'مرد' : 'زن'}</div>
+                              <div className="font-medium flex items-center gap-2">
+                                  {formData.gender === 'male' ? <span className="text-blue-500">♂ مرد</span> : <span className="text-pink-500">♀ زن</span>}
+                              </div>
                           )}
                       </div>
-                      <div className={`p-3 rounded-xl ${cardClass}`}>
-                          <label className="text-xs font-bold opacity-50 block mb-1">شغل / حرفه</label>
+                      
+                      <div className={`p-4 rounded-2xl ${cardClass}`}>
+                          <label className="text-xs font-bold opacity-50 block mb-2 uppercase tracking-wider">شغل / حرفه</label>
                           {editMode ? (
-                              <input className={inputClass} value={formData.occupation || ''} onChange={(e) => handleChange('occupation', e.target.value)} placeholder="مثلا: معلم" />
+                              <input className={inputClass} value={formData.occupation || ''} onChange={(e) => handleChange('occupation', e.target.value)} />
                           ) : (
                               <div className="font-medium">{formData.occupation || '-'}</div>
                           )}
                       </div>
-                      <div className={`p-3 rounded-xl ${cardClass}`}>
-                          <label className="text-xs font-bold opacity-50 block mb-1">تاریخ تولد</label>
-                          {editMode ? (
-                              <input dir="ltr" className={`${inputClass} text-left`} value={formData.birthDate || ''} onChange={(e) => handleChange('birthDate', e.target.value)} placeholder="1360/01/01" />
-                          ) : (
-                              <div className="font-medium dir-ltr text-right">{formData.birthDate || '-'}</div>
-                          )}
-                      </div>
-                      <div className={`p-3 rounded-xl ${cardClass}`}>
-                          <label className="text-xs font-bold opacity-50 block mb-1">تاریخ وفات</label>
-                          {editMode ? (
-                              <input dir="ltr" className={`${inputClass} text-left`} value={formData.deathDate || ''} onChange={(e) => handleChange('deathDate', e.target.value)} placeholder="-" />
-                          ) : (
-                              <div className="font-medium dir-ltr text-right">{formData.deathDate || '-'}</div>
-                          )}
-                      </div>
-                  </div>
 
-                  <div className={`p-3 rounded-xl ${cardClass}`}>
-                      <label className="text-xs font-bold opacity-50 block mb-1 flex items-center gap-1"><MapPin size={12}/> محل زندگی/تولد</label>
-                      {editMode ? (
-                          <input className={inputClass} value={formData.location || ''} onChange={(e) => handleChange('location', e.target.value)} placeholder="تهران، ایران" />
-                      ) : (
-                          <div className="font-medium">{formData.location || '-'}</div>
-                      )}
+                      <div className={`p-4 rounded-2xl ${cardClass}`}>
+                          <label className="text-xs font-bold opacity-50 block mb-2 uppercase tracking-wider">تاریخ تولد</label>
+                          {editMode ? (
+                              <input dir="ltr" className={`${inputClass} text-left font-mono`} value={formData.birthDate || ''} onChange={(e) => handleChange('birthDate', e.target.value)} placeholder="YYYY/MM/DD" />
+                          ) : (
+                              <div className="font-medium dir-ltr text-right font-mono">{formData.birthDate || '-'}</div>
+                          )}
+                      </div>
+
+                      <div className={`p-4 rounded-2xl ${cardClass}`}>
+                          <label className="text-xs font-bold opacity-50 block mb-2 uppercase tracking-wider">تاریخ وفات</label>
+                          {editMode ? (
+                              <input dir="ltr" className={`${inputClass} text-left font-mono`} value={formData.deathDate || ''} onChange={(e) => handleChange('deathDate', e.target.value)} placeholder="-" />
+                          ) : (
+                              <div className="font-medium dir-ltr text-right font-mono">{formData.deathDate || '-'}</div>
+                          )}
+                      </div>
+
+                      <div className={`p-4 rounded-2xl ${cardClass} md:col-span-2`}>
+                          <label className="text-xs font-bold opacity-50 block mb-2 uppercase tracking-wider flex items-center gap-1"><MapPin size={12}/> محل زندگی/تولد</label>
+                          {editMode ? (
+                              <input className={inputClass} value={formData.location || ''} onChange={(e) => handleChange('location', e.target.value)} placeholder="تهران، ایران" />
+                          ) : (
+                              <div className="font-medium">{formData.location || '-'}</div>
+                          )}
+                      </div>
                   </div>
                   
                   {editMode && (
-                      <div className={`p-4 rounded-xl ${isDark ? 'bg-slate-800/50 border border-slate-700' : 'bg-slate-50/80 border border-slate-100'}`}>
-                          <label className="text-xs font-bold opacity-60 mb-2 block">مدیریت برچسب‌ها</label>
+                      <div className={`p-4 rounded-2xl ${isDark ? 'bg-slate-800/50 border border-slate-700' : 'bg-slate-50/80 border border-slate-100'}`}>
+                          <label className="text-xs font-bold opacity-60 mb-2 block uppercase tracking-wider">برچسب‌های رنگی</label>
                           <div className="flex gap-2">
                               <input 
                                 value={newTag}
                                 onChange={(e) => setNewTag(e.target.value)}
                                 className={`${inputClass} flex-1`}
-                                placeholder="عنوان برچسب"
+                                placeholder="عنوان برچسب (مثلاً: شاعر)"
                               />
                               <input 
                                 type="color" 
@@ -374,6 +372,23 @@ ${formData.bio || '---'}
                               />
                               <button onClick={handleAddTag} className="bg-teal-600 text-white p-2 rounded-lg hover:bg-teal-500 shadow-lg"><Plus size={18}/></button>
                           </div>
+                          <div className="flex flex-wrap gap-2 mt-3">
+                              {formData.tags?.map(tag => (
+                                 <span key={tag.id} style={{backgroundColor: tag.color + '20', color: tag.color, borderColor: tag.color}} className="border text-xs px-2 py-1 rounded-full flex items-center gap-1 font-bold">
+                                    {tag.label} 
+                                    <X size={10} className="cursor-pointer" onClick={() => handleChange('tags', formData.tags?.filter(t => t.id !== tag.id))} />
+                                 </span>
+                              ))}
+                          </div>
+                      </div>
+                  )}
+                  {!editMode && formData.tags && formData.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                          {formData.tags.map(tag => (
+                             <span key={tag.id} style={{backgroundColor: tag.color}} className="text-white text-xs px-3 py-1 rounded-full shadow-sm">
+                                {tag.label}
+                             </span>
+                          ))}
                       </div>
                   )}
               </div>
@@ -385,24 +400,24 @@ ${formData.bio || '---'}
                   {editMode ? (
                       <div className="space-y-3">
                            <textarea 
-                             className={`w-full h-64 p-4 rounded-xl border text-sm leading-7 outline-none focus:border-teal-500 ${isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white/50 border-slate-200'}`}
+                             className={`w-full h-80 p-5 rounded-2xl border text-sm leading-8 outline-none focus:border-teal-500 transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white/50 border-slate-200'}`}
                              value={formData.bio || ''}
                              onChange={(e) => handleChange('bio', e.target.value)}
-                             placeholder="زندگینامه را اینجا بنویسید..."
+                             placeholder="داستان زندگی این فرد را اینجا بنویسید..."
                            />
                            <button 
                              onClick={handleGenerateBio}
                              disabled={isGenerating}
-                             className="w-full py-2 bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 shadow-lg shadow-orange-200/50 hover:scale-[1.02] transition-all"
+                             className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:shadow-orange-500/30 hover:scale-[1.01] transition-all"
                            >
-                               {isGenerating ? <span className="animate-spin">⏳</span> : <Sparkles size={16}/>}
-                               تولید خودکار با الگوی آماده
+                               {isGenerating ? <span className="animate-spin">⏳</span> : <Sparkles size={18}/>}
+                               تولید متن پیشنهادی
                            </button>
                       </div>
                   ) : (
-                      <div className={`p-6 rounded-2xl border ${isDark ? 'bg-slate-800/30 border-slate-700 text-slate-300' : 'bg-white/60 border-white/50 text-slate-600 shadow-sm'} leading-8 text-justify relative overflow-hidden`}>
-                          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-teal-400 via-amber-400 to-pink-400 opacity-50"></div>
-                          {formData.bio ? formData.bio : <p className="opacity-50 italic text-center">هنوز زندگینامه‌ای ثبت نشده است.</p>}
+                      <div className={`p-8 rounded-2xl border ${isDark ? 'bg-slate-800/30 border-slate-700 text-slate-300' : 'bg-white/60 border-white/50 text-slate-700 shadow-sm'} leading-9 text-justify text-lg relative overflow-hidden`}>
+                          <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-teal-400 via-amber-400 to-pink-400 opacity-50"></div>
+                          {formData.bio ? formData.bio : <div className="text-center opacity-40 py-10 flex flex-col items-center gap-2"><FileText size={40} strokeWidth={1}/>هنوز زندگینامه‌ای ثبت نشده است.</div>}
                       </div>
                   )}
               </div>
@@ -410,42 +425,45 @@ ${formData.bio || '---'}
 
           {/* EVENTS TAB */}
           {activeTab === 'events' && (
-               <div className="space-y-6 animate-enter">
+               <div className="space-y-6 animate-enter px-2">
                    {editMode && (
-                       <div className={`p-4 rounded-xl border space-y-3 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50/80 border-slate-200'}`}>
-                           <h4 className="text-xs font-bold opacity-60">افزودن رویداد جدید</h4>
-                           <div className="grid grid-cols-2 gap-2">
-                               <input placeholder="عنوان" className={inputClass} value={newEvent.title} onChange={e => setNewEvent({...newEvent, title: e.target.value})} />
-                               <input dir="ltr" placeholder="تاریخ" className={`${inputClass} text-left`} value={newEvent.date} onChange={e => setNewEvent({...newEvent, date: e.target.value})} />
+                       <div className={`p-5 rounded-2xl border space-y-4 mb-8 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50/80 border-slate-200'}`}>
+                           <h4 className="text-xs font-bold opacity-60 uppercase tracking-wider">افزودن رویداد جدید</h4>
+                           <div className="grid grid-cols-2 gap-3">
+                               <input placeholder="عنوان رویداد" className={inputClass} value={newEvent.title} onChange={e => setNewEvent({...newEvent, title: e.target.value})} />
+                               <input dir="ltr" placeholder="تاریخ (YYYY)" className={`${inputClass} text-left`} value={newEvent.date} onChange={e => setNewEvent({...newEvent, date: e.target.value})} />
                            </div>
-                           <input placeholder="توضیحات..." className={inputClass} value={newEvent.location || ''} onChange={e => setNewEvent({...newEvent, location: e.target.value})} />
-                           <button onClick={handleAddEvent} className="w-full py-2 bg-teal-600 text-white rounded-lg text-sm font-bold shadow hover:bg-teal-500 transition-all">افزودن</button>
+                           <input placeholder="مکان یا توضیحات کوتاه..." className={inputClass} value={newEvent.location || ''} onChange={e => setNewEvent({...newEvent, location: e.target.value})} />
+                           <button onClick={handleAddEvent} className="w-full py-2 bg-teal-600 text-white rounded-xl text-sm font-bold shadow hover:bg-teal-500 transition-all">ثبت رویداد</button>
                        </div>
                    )}
 
-                   <div className={`relative border-r-2 mr-2 space-y-8 ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
-                       <div className="relative pr-6">
-                           <div className="absolute -right-[9px] top-1 w-4 h-4 rounded-full bg-teal-500 ring-4 ring-white/20 shadow-sm"></div>
-                           <span className="text-xs font-mono opacity-50 block mb-1">{formData.birthDate || '---'}</span>
-                           <div className="font-bold">تولد</div>
-                           <div className="text-xs opacity-60">{formData.location}</div>
+                   <div className={`relative border-r-2 mr-4 space-y-10 pb-4 ${isDark ? 'border-slate-700' : 'border-slate-300'}`}>
+                       {/* Birth */}
+                       <div className="relative pr-8">
+                           <div className="absolute -right-[9px] top-1.5 w-4 h-4 rounded-full bg-teal-500 ring-4 ring-white/20 shadow-md z-10"></div>
+                           <span className="text-sm font-mono opacity-50 block mb-1 font-bold">{formData.birthDate || '---'}</span>
+                           <div className="font-bold text-lg">تولد</div>
+                           <div className="text-sm opacity-60 mt-1">{formData.location}</div>
                        </div>
                        
+                       {/* Dynamic Events */}
                        {formData.events?.sort((a,b) => a.date.localeCompare(b.date)).map((event) => (
-                           <div key={event.id} className="relative pr-6 group hover:translate-x-1 transition-transform">
-                               <div className="absolute -right-[9px] top-1 w-4 h-4 rounded-full bg-amber-400 ring-4 ring-white/20 shadow-sm group-hover:scale-125 transition-transform"></div>
-                               <span className="text-xs font-mono opacity-50 block mb-1">{event.date}</span>
-                               <div className="font-bold">{event.title}</div>
-                               <div className="text-xs opacity-60">{event.location}</div>
-                               {editMode && <button onClick={() => handleChange('events', formData.events?.filter(e => e.id !== event.id))} className="text-red-400 text-[10px] mt-1 hover:underline">حذف</button>}
+                           <div key={event.id} className="relative pr-8 group hover:translate-x-1 transition-transform cursor-default">
+                               <div className="absolute -right-[9px] top-1.5 w-4 h-4 rounded-full bg-amber-400 ring-4 ring-white/20 shadow-md z-10 group-hover:scale-125 transition-transform"></div>
+                               <span className="text-sm font-mono opacity-50 block mb-1 font-bold">{event.date}</span>
+                               <div className="font-bold text-lg">{event.title}</div>
+                               <div className="text-sm opacity-60 mt-1">{event.location}</div>
+                               {editMode && <button onClick={() => handleChange('events', formData.events?.filter(e => e.id !== event.id))} className="text-red-400 text-xs mt-2 hover:underline opacity-0 group-hover:opacity-100 transition-opacity">حذف</button>}
                            </div>
                        ))}
 
+                       {/* Death */}
                        {formData.deathDate && (
-                           <div className="relative pr-6">
-                               <div className="absolute -right-[9px] top-1 w-4 h-4 rounded-full bg-slate-500 ring-4 ring-white/20 shadow-sm"></div>
-                               <span className="text-xs font-mono opacity-50 block mb-1">{formData.deathDate}</span>
-                               <div className="font-bold">وفات</div>
+                           <div className="relative pr-8">
+                               <div className="absolute -right-[9px] top-1.5 w-4 h-4 rounded-full bg-slate-500 ring-4 ring-white/20 shadow-md z-10"></div>
+                               <span className="text-sm font-mono opacity-50 block mb-1 font-bold">{formData.deathDate}</span>
+                               <div className="font-bold text-lg text-slate-500">وفات</div>
                            </div>
                        )}
                    </div>
@@ -455,24 +473,26 @@ ${formData.bio || '---'}
           {/* GALLERY TAB */}
           {activeTab === 'gallery' && (
                <div className="animate-enter">
-                   <div className="grid grid-cols-2 gap-3">
+                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                        {formData.gallery?.map((img, idx) => (
-                           <div key={idx} className="aspect-square rounded-xl overflow-hidden relative group shadow-md border border-white/10">
+                           <div key={idx} className="aspect-square rounded-2xl overflow-hidden relative group shadow-lg border border-white/10 cursor-pointer">
                                <img src={img} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={`Gallery ${idx}`} />
-                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                   <Eye size={24} className="text-white drop-shadow-md"/>
+                               </div>
                                {editMode && (
                                    <button 
-                                     onClick={() => handleChange('gallery', formData.gallery?.filter((_, i) => i !== idx))}
-                                     className="absolute top-2 right-2 bg-red-500/80 backdrop-blur text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                                     onClick={(e) => { e.stopPropagation(); handleChange('gallery', formData.gallery?.filter((_, i) => i !== idx)); }}
+                                     className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 shadow-lg"
                                    >
-                                       <Trash2 size={14}/>
+                                       <Trash2 size={16}/>
                                    </button>
                                )}
                            </div>
                        ))}
                        <div 
                          onClick={() => galleryInputRef.current?.click()}
-                         className={`aspect-square rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-[1.02] ${isDark ? 'border-slate-700 text-slate-500 hover:border-teal-500 hover:text-teal-400' : 'border-slate-300 text-slate-400 hover:border-teal-500 hover:text-teal-600 hover:bg-teal-50/50'}`}
+                         className={`aspect-square rounded-2xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-[1.02] ${isDark ? 'border-slate-700 text-slate-500 hover:border-teal-500 hover:text-teal-400 bg-slate-800/30' : 'border-slate-300 text-slate-400 hover:border-teal-500 hover:text-teal-600 hover:bg-teal-50/50'}`}
                        >
                            <Plus size={32} className="mb-2 opacity-50" />
                            <span className="text-xs font-bold">افزودن تصویر</span>
@@ -486,33 +506,33 @@ ${formData.bio || '---'}
           {activeTab === 'relations' && (
             <div className="space-y-6 animate-enter">
                 
-                <div className="grid grid-cols-2 gap-3">
-                    <button onClick={() => onAddChild(member.id)} className={`${cardClass} p-3 flex flex-col items-center gap-2 hover:border-teal-500 group`}>
-                        <div className="bg-teal-100/20 p-2 rounded-full text-teal-600 group-hover:scale-110 transition-transform"><ArrowUp size={20} className="rotate-180"/></div>
-                        <span className="text-xs font-bold">افزودن فرزند</span>
+                <div className="grid grid-cols-2 gap-4">
+                    <button onClick={() => onAddChild(member.id)} className={`${cardClass} p-4 rounded-2xl flex flex-col items-center gap-3 hover:border-teal-500 group transition-all`}>
+                        <div className="bg-teal-100/20 p-3 rounded-full text-teal-600 group-hover:scale-110 transition-transform"><ArrowUp size={24} className="rotate-180"/></div>
+                        <span className="text-sm font-bold">افزودن فرزند</span>
                     </button>
-                    <button onClick={() => onAddSibling(member.id)} className={`${cardClass} p-3 flex flex-col items-center gap-2 hover:border-blue-500 group`}>
-                        <div className="bg-blue-100/20 p-2 rounded-full text-blue-600 group-hover:scale-110 transition-transform"><GitBranch size={20}/></div>
-                        <span className="text-xs font-bold">افزودن هم‌سطح</span>
+                    <button onClick={() => onAddSibling(member.id)} className={`${cardClass} p-4 rounded-2xl flex flex-col items-center gap-3 hover:border-blue-500 group transition-all`}>
+                        <div className="bg-blue-100/20 p-3 rounded-full text-blue-600 group-hover:scale-110 transition-transform"><GitBranch size={24}/></div>
+                        <span className="text-sm font-bold">افزودن هم‌سطح</span>
                     </button>
-                    <button onClick={() => setIsAddSpouseMode(!isAddSpouseMode)} className={`${cardClass} col-span-2 p-3 flex flex-col items-center gap-2 hover:border-pink-500 group`}>
-                        <div className="bg-pink-100/20 p-2 rounded-full text-pink-600 group-hover:scale-110 transition-transform"><HeartHandshake size={20}/></div>
-                        <span className="text-xs font-bold">افزودن / مدیریت همسر</span>
+                    <button onClick={() => setIsAddSpouseMode(!isAddSpouseMode)} className={`${cardClass} col-span-2 p-4 rounded-2xl flex flex-row items-center justify-center gap-3 hover:border-pink-500 group transition-all`}>
+                        <div className="bg-pink-100/20 p-2 rounded-full text-pink-600 group-hover:scale-110 transition-transform"><HeartHandshake size={24}/></div>
+                        <span className="text-sm font-bold">مدیریت همسر / ازدواج</span>
                     </button>
                 </div>
 
                 {isAddSpouseMode && (
-                    <div className="p-4 rounded-xl border border-pink-200/50 bg-pink-50/50 backdrop-blur-sm animate-fade-in-scale">
-                        <h4 className="text-sm font-bold text-pink-600 mb-3 flex items-center gap-2"><Heart size={16}/> ثبت ازدواج</h4>
+                    <div className="p-6 rounded-2xl border border-pink-200/50 bg-pink-50/50 backdrop-blur-sm animate-fade-in-scale">
+                        <h4 className="text-sm font-bold text-pink-600 mb-4 flex items-center gap-2"><Heart size={18}/> ثبت ازدواج جدید</h4>
                         
-                        <div className="flex gap-2 mb-4 bg-white/50 p-1 rounded-lg border border-pink-100">
-                            <button onClick={() => setSpouseType('new')} className={`flex-1 py-1 text-xs rounded-md transition-all ${spouseType === 'new' ? 'bg-pink-500 text-white shadow' : 'text-slate-500'}`}>شخص جدید</button>
-                            <button onClick={() => setSpouseType('existing')} className={`flex-1 py-1 text-xs rounded-md transition-all ${spouseType === 'existing' ? 'bg-pink-500 text-white shadow' : 'text-slate-500'}`}>ازدواج فامیلی</button>
+                        <div className="flex gap-2 mb-4 bg-white/50 p-1.5 rounded-xl border border-pink-100">
+                            <button onClick={() => setSpouseType('new')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${spouseType === 'new' ? 'bg-pink-500 text-white shadow-md' : 'text-slate-500 hover:bg-pink-100'}`}>شخص جدید</button>
+                            <button onClick={() => setSpouseType('existing')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${spouseType === 'existing' ? 'bg-pink-500 text-white shadow-md' : 'text-slate-500 hover:bg-pink-100'}`}>ازدواج فامیلی</button>
                         </div>
 
                         {spouseType === 'existing' && (
                              <select 
-                                className="w-full p-2 rounded-lg border border-pink-200 text-sm mb-3 bg-white/80 outline-none"
+                                className="w-full p-3 rounded-xl border border-pink-200 text-sm mb-4 bg-white/80 outline-none"
                                 value={spouseTargetId}
                                 onChange={(e) => setSpouseTargetId(e.target.value)}
                              >
@@ -523,34 +543,34 @@ ${formData.bio || '---'}
                              </select>
                         )}
 
-                        <button onClick={handleAddSpouseSubmit} className="w-full py-2 bg-pink-600 text-white rounded-lg font-bold shadow-lg shadow-pink-300/50 hover:bg-pink-700 transition-all hover:scale-[1.01]">
-                            ثبت همسر
+                        <button onClick={handleAddSpouseSubmit} className="w-full py-3 bg-pink-600 text-white rounded-xl font-bold shadow-lg shadow-pink-300/50 hover:bg-pink-700 transition-all hover:scale-[1.01]">
+                            تایید و ثبت همسر
                         </button>
                     </div>
                 )}
 
-                <div className={`${cardClass} p-4 rounded-xl`}>
-                    <h4 className="text-xs font-bold opacity-50 mb-3">ارتباطات ویژه (غیر درختی)</h4>
-                    <div className="space-y-2 mb-4">
+                <div className={`${cardClass} p-6 rounded-2xl`}>
+                    <h4 className="text-xs font-bold opacity-50 mb-4 uppercase tracking-wider">ارتباطات ویژه (غیر درختی)</h4>
+                    <div className="space-y-3 mb-5">
                         {member.connections?.map((conn, idx) => {
                              const target = allMembers.find(m => m.id === conn.targetId);
                              return (
-                                 <div key={idx} className={`flex justify-between items-center p-2 rounded-lg border text-sm ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white/50 border-slate-200'}`}>
-                                     <div className="flex items-center gap-2">
+                                 <div key={idx} className={`flex justify-between items-center p-3 rounded-xl border text-sm ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white/50 border-slate-200'}`}>
+                                     <div className="flex items-center gap-3">
                                          <span className="w-2 h-2 bg-amber-400 rounded-full shadow-sm shadow-amber-400/50"></span>
                                          <span className="opacity-70">{conn.label}: </span>
-                                         <span className="font-bold">{target?.name || 'ناشناس'}</span>
+                                         <span className="font-bold text-base">{target?.name || 'ناشناس'}</span>
                                      </div>
-                                     <button onClick={() => onRemoveConnection(member.id, conn.targetId)} className="text-red-400 hover:bg-red-100/20 p-1 rounded transition-colors"><Trash2 size={14}/></button>
+                                     <button onClick={() => onRemoveConnection(member.id, conn.targetId)} className="text-red-400 hover:bg-red-100/20 p-2 rounded-lg transition-colors"><Trash2 size={16}/></button>
                                  </div>
                              );
                         })}
-                        {(!member.connections || member.connections.length === 0) && <p className="text-xs opacity-40 text-center italic">هیچ ارتباط ویژه‌ای ثبت نشده است.</p>}
+                        {(!member.connections || member.connections.length === 0) && <p className="text-sm opacity-40 text-center italic py-4">هیچ ارتباط ویژه‌ای ثبت نشده است.</p>}
                     </div>
                     
-                    <div className="flex gap-2 mt-2">
+                    <div className="flex gap-2">
                         <select 
-                          className={`flex-1 p-2 rounded-lg border text-xs outline-none ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white/80 border-slate-200'}`}
+                          className={`flex-1 p-3 rounded-xl border text-sm outline-none ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white/80 border-slate-200'}`}
                           value={newConnectionTarget}
                           onChange={(e) => setNewConnectionTarget(e.target.value)}
                         >
@@ -560,26 +580,26 @@ ${formData.bio || '---'}
                              ))}
                         </select>
                         <input 
-                           className={`w-24 p-2 rounded-lg border text-xs outline-none ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white/80 border-slate-200'}`}
-                           placeholder="عنوان"
+                           className={`w-32 p-3 rounded-xl border text-sm outline-none ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white/80 border-slate-200'}`}
+                           placeholder="عنوان رابطه"
                            value={newConnectionLabel}
                            onChange={(e) => setNewConnectionLabel(e.target.value)}
                         />
                         <button 
                            disabled={!newConnectionTarget}
                            onClick={() => { if(newConnectionTarget) onAddConnection(member.id, newConnectionTarget, newConnectionLabel); }} 
-                           className="bg-amber-500 text-white p-2 rounded-lg shadow-lg shadow-amber-500/30 disabled:opacity-50 hover:bg-amber-600 transition-colors"
+                           className="bg-amber-500 text-white px-4 rounded-xl shadow-lg shadow-amber-500/30 disabled:opacity-50 hover:bg-amber-600 transition-colors"
                         >
-                            <Plus size={16}/>
+                            <Plus size={20}/>
                         </button>
                     </div>
                 </div>
                 
-                <div className="p-4 rounded-xl border border-teal-200/50 bg-teal-50/30 backdrop-blur-sm">
-                    <h4 className="text-xs font-bold text-teal-700 mb-3 flex items-center gap-2"><Calculator size={14}/> ماشین حساب نسبت‌ها</h4>
-                    <div className="flex gap-2 mb-3">
+                <div className="p-6 rounded-2xl border border-teal-200/50 bg-teal-50/30 backdrop-blur-sm">
+                    <h4 className="text-xs font-bold text-teal-700 mb-4 flex items-center gap-2 uppercase tracking-wider"><Calculator size={16}/> ماشین حساب پیشرفته نسبت‌ها</h4>
+                    <div className="flex gap-2 mb-4">
                         <select 
-                          className="w-full p-2 rounded-lg border border-teal-200 text-sm bg-white/80 outline-none focus:ring-1 focus:ring-teal-500"
+                          className="w-full p-3 rounded-xl border border-teal-200 text-sm bg-white/80 outline-none focus:ring-1 focus:ring-teal-500"
                           value={calcTargetId}
                           onChange={(e) => { setCalcTargetId(e.target.value); setCalcResult(null); }}
                         >
@@ -588,13 +608,13 @@ ${formData.bio || '---'}
                                  <option key={m.id} value={m.id}>{m.name}</option>
                              ))}
                         </select>
-                        <button onClick={handleCalcRelationship} disabled={!calcTargetId} className="bg-teal-600 text-white px-4 rounded-lg font-bold shadow-lg shadow-teal-500/20 disabled:opacity-50 hover:bg-teal-700">
+                        <button onClick={handleCalcRelationship} disabled={!calcTargetId} className="bg-teal-600 text-white px-6 rounded-xl font-bold shadow-lg shadow-teal-500/20 disabled:opacity-50 hover:bg-teal-700 transition-all">
                             محاسبه
                         </button>
                     </div>
                     {calcResult && (
-                        <div className="bg-white/90 p-3 rounded-lg border border-teal-200 text-center text-teal-700 font-bold text-sm animate-fade-in-scale shadow-sm">
-                            {calcResult}
+                        <div className="bg-white/90 p-4 rounded-xl border border-teal-200 text-center text-teal-800 font-bold text-lg animate-fade-in-scale shadow-sm flex items-center justify-center gap-2">
+                           <Sparkles size={16} className="text-amber-500"/> {calcResult}
                         </div>
                     )}
                 </div>
@@ -604,37 +624,29 @@ ${formData.bio || '---'}
           {/* SETTINGS TAB */}
           {activeTab === 'settings' && (
                <div className="space-y-6 animate-enter">
-                    <div className={`${cardClass} p-4 rounded-xl`}>
-                        <h4 className="text-xs font-bold opacity-50 mb-3 flex items-center gap-2"><Eye size={16}/> ابزارهای بصری</h4>
-                        <div className="space-y-2">
-                            <button onClick={() => onHighlightPath(member.id, 'ancestors')} className={`w-full py-2 border rounded-lg text-sm transition-colors flex justify-between px-4 ${isDark ? 'bg-slate-800 border-slate-600 hover:border-teal-500' : 'bg-white/60 border-slate-200 hover:border-teal-500 hover:text-teal-600'}`}>
-                                <span>نمایش اجداد (Ancestors)</span>
+                    <div className={`${cardClass} p-6 rounded-2xl`}>
+                        <h4 className="text-xs font-bold opacity-50 mb-4 flex items-center gap-2 uppercase tracking-wider"><Eye size={16}/> ابزارهای بصری و تمرکز</h4>
+                        <div className="space-y-3">
+                            <button onClick={() => onHighlightPath(member.id, 'ancestors')} className={`w-full py-3 border rounded-xl text-sm font-medium transition-colors flex justify-between px-5 items-center ${isDark ? 'bg-slate-800 border-slate-600 hover:border-teal-500' : 'bg-white/60 border-slate-200 hover:border-teal-500 hover:text-teal-600'}`}>
+                                <span>نمایش اجداد و نیاکان (Ancestors)</span>
                                 <ArrowUp size={16}/>
                             </button>
-                            <button onClick={() => onHighlightPath(member.id, 'descendants')} className={`w-full py-2 border rounded-lg text-sm transition-colors flex justify-between px-4 ${isDark ? 'bg-slate-800 border-slate-600 hover:border-teal-500' : 'bg-white/60 border-slate-200 hover:border-teal-500 hover:text-teal-600'}`}>
-                                <span>نمایش نوادگان (Descendants)</span>
+                            <button onClick={() => onHighlightPath(member.id, 'descendants')} className={`w-full py-3 border rounded-xl text-sm font-medium transition-colors flex justify-between px-5 items-center ${isDark ? 'bg-slate-800 border-slate-600 hover:border-teal-500' : 'bg-white/60 border-slate-200 hover:border-teal-500 hover:text-teal-600'}`}>
+                                <span>نمایش نوادگان و فرزندان (Descendants)</span>
                                 <ArrowUp size={16} className="rotate-180"/>
                             </button>
-                             <button onClick={() => onHighlightPath(member.id, 'reset')} className={`w-full py-2 rounded-lg text-sm transition-colors flex justify-between px-4 ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
-                                <span>بازنشانی حالت نمایش</span>
+                             <button onClick={() => onHighlightPath(member.id, 'reset')} className={`w-full py-3 rounded-xl text-sm font-medium transition-colors flex justify-between px-5 items-center ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
+                                <span>بازنشانی حالت نمایش (حالت عادی)</span>
                                 <EyeOff size={16}/>
                             </button>
                         </div>
                     </div>
                     
-                    <div className={`${cardClass} p-4 rounded-xl`}>
-                        <h4 className="text-xs font-bold opacity-50 mb-3">عملیات پیشرفته</h4>
-                        <div className="space-y-3">
-                             <button onClick={handlePrint} className="w-full py-2 bg-blue-50/50 text-blue-600 border border-blue-100 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors flex items-center justify-center gap-2">
-                                <FileText size={16}/> چاپ گزارش کامل فرد
-                             </button>
-                             
-                             <hr className="border-current opacity-10"/>
-                             
-                             <button onClick={() => { if(window.confirm('آیا از حذف این عضو و تمام زیرمجموعه‌هایش اطمینان دارید؟')) onDeleteMember(member.id); }} className="w-full py-3 bg-red-50/50 text-red-600 border border-red-100 rounded-xl text-sm font-bold hover:bg-red-100 transition-colors flex items-center justify-center gap-2">
-                                <Trash2 size={16}/> حذف عضو از درخت
-                             </button>
-                        </div>
+                    <div className={`${cardClass} p-6 rounded-2xl border-red-100`}>
+                        <h4 className="text-xs font-bold opacity-50 mb-4 uppercase tracking-wider text-red-400">منطقه خطر</h4>
+                        <button onClick={() => { if(window.confirm('آیا از حذف این عضو و تمام زیرمجموعه‌هایش اطمینان دارید؟ این عملیات غیرقابل بازگشت است.')) onDeleteMember(member.id); }} className="w-full py-4 bg-red-50/50 text-red-600 border border-red-100 rounded-2xl text-sm font-bold hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2 shadow-sm">
+                           <Trash2 size={18}/> حذف دائمی عضو و زیرشاخه‌ها
+                        </button>
                     </div>
                </div>
           )}

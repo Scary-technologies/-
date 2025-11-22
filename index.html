@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
   <head>
@@ -27,13 +28,14 @@
               }
             },
             animation: {
-              'enter': 'enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              'enter': 'enter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
               'fade-in-scale': 'fadeInScale 0.3s ease-out forwards',
+              'spin-slow': 'spin 3s linear infinite',
             },
             keyframes: {
               enter: {
-                '0%': { opacity: '0', transform: 'translateY(10px) scale(0.98)' },
-                '100%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+                '0%': { opacity: '0', transform: 'scale(0.9)' },
+                '100%': { opacity: '1', transform: 'scale(1)' },
               },
               fadeInScale: {
                 '0%': { opacity: '0', transform: 'scale(0.95)' },
@@ -89,10 +91,24 @@
         -ms-overflow-style: none;  /* IE and Edge */
         scrollbar-width: none;  /* Firefox */
       }
+
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background-color: rgba(156, 163, 175, 0.3);
+        border-radius: 20px;
+      }
+      .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+        background-color: rgba(156, 163, 175, 0.5);
+      }
       
       /* Advanced Glassmorphism */
       .glass-panel {
-        background: rgba(255, 255, 255, 0.4);
+        background: rgba(255, 255, 255, 0.65);
         backdrop-filter: blur(16px) saturate(180%);
         -webkit-backdrop-filter: blur(16px) saturate(180%);
         border: 1px solid rgba(255, 255, 255, 0.4);
@@ -100,7 +116,7 @@
       }
       
       .glass-panel-dark {
-        background: rgba(30, 41, 59, 0.6);
+        background: rgba(30, 41, 59, 0.85);
         backdrop-filter: blur(16px) saturate(180%);
         -webkit-backdrop-filter: blur(16px) saturate(180%);
         border: 1px solid rgba(255, 255, 255, 0.08);
@@ -108,21 +124,21 @@
       }
       
       .glass-panel-vintage {
-        background: rgba(253, 246, 227, 0.85);
+        background: rgba(253, 246, 227, 0.95);
         backdrop-filter: blur(8px);
         border: 1px solid #d3c6aa;
         box-shadow: 4px 4px 0px rgba(211, 198, 170, 0.5);
       }
 
       .glass-card {
-        background: rgba(255, 255, 255, 0.3);
-        border: 1px solid rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.5);
         transition: all 0.3s ease;
       }
       .glass-card:hover {
-        background: rgba(255, 255, 255, 0.5);
+        background: rgba(255, 255, 255, 0.7);
         transform: translateY(-2px);
-        box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.1);
       }
 
       .glass-card-dark {
@@ -131,19 +147,28 @@
         transition: all 0.3s ease;
       }
       .glass-card-dark:hover {
-        background: rgba(255, 255, 255, 0.07);
+        background: rgba(255, 255, 255, 0.08);
         transform: translateY(-2px);
-        box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.3);
+      }
+      
+      /* Context Menu Animation */
+      @keyframes contextEnter {
+        from { opacity: 0; transform: scale(0.95) translateY(5px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+      }
+      .context-menu-enter {
+        animation: contextEnter 0.1s ease-out forwards;
       }
     </style>
-<script type="importmap">
+  <script type="importmap">
 {
   "imports": {
     "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "d3": "https://aistudiocdn.com/d3@^7.9.0",
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0"
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "d3": "https://aistudiocdn.com/d3@^7.9.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
   }
 }
 </script>

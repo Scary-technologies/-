@@ -1,13 +1,14 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useLayoutEffect } from 'react';
 import * as d3 from 'd3';
 import { FamilyMember, AppTheme, Tag } from '../types';
-import { Maximize, ZoomIn, ZoomOut, Image as ImageIcon, GitMerge, Plus, GitBranch, Edit3 } from 'lucide-react';
+import { Maximize, ZoomIn, ZoomOut, Image as ImageIcon, GitMerge, Plus, GitBranch, Route, User } from 'lucide-react';
 
 interface FamilyTreeProps {
   data: FamilyMember;
   onNodeClick: (member: FamilyMember) => void;
-  selectedId?: string;
+  onOpenDetails: (member: FamilyMember) => void;
+  selectedId?: string | null;
   orientation: 'horizontal' | 'vertical';
   theme: AppTheme;
   highlightedIds: Set<string>;
@@ -18,6 +19,7 @@ interface FamilyTreeProps {
 const FamilyTree: React.FC<FamilyTreeProps> = ({ 
   data, 
   onNodeClick, 
+  onOpenDetails,
   selectedId, 
   orientation,
   theme,
@@ -31,8 +33,12 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const [zoomTransform, setZoomTransform] = useState(d3.zoomIdentity);
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [linkStyle, setLinkStyle] = useState<'curved' | 'straight'>('curved');
+  const [preventOverlap, setPreventOverlap] = useState(false);
   const [heatmapMode, setHeatmapMode] = useState(false);
   const [selectedNodePos, setSelectedNodePos] = useState<{x: number, y: number} | null>(null);
+  
+  // Store node map in ref to access it without redrawing graph
+  const nodeMapRef = useRef<Map<string, d3.HierarchyPointNode<FamilyMember>>>(new Map());
 
   // Theme configuration
   const getThemeColors = (theme: AppTheme) => {
@@ -93,6 +99,25 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
+  // Effect to calculate selectedNodePos independently from graph drawing
+  useEffect(() => {
+      if (selectedId && nodeMapRef.current.has(selectedId)) {
+        const sNode = nodeMapRef.current.get(selectedId);
+        if (sNode) {
+            const t = zoomTransform;
+            const x = orientation === 'horizontal' ? sNode.y : sNode.x;
+            const y = orientation === 'horizontal' ? sNode.x : sNode.y;
+            setSelectedNodePos({
+                x: t.x + x * t.k + 120, // margin.left
+                y: t.y + y * t.k + 80   // margin.top
+            });
+        }
+      } else {
+        setSelectedNodePos(null);
+      }
+  }, [selectedId, zoomTransform, orientation, dimensions]);
+
+  // Main Graph Drawing Effect - DOES NOT depend on zoomTransform to prevent loop
   useEffect(() => {
     if (!data || !svgRef.current) return;
 
@@ -133,24 +158,43 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     femaleGrad.append("stop").attr("offset", "100%").style("stop-color", colors.femaleGrad[1]);
 
     const g = svg.append("g")
+      .attr("class", "tree-group")
       .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Apply current zoom immediately to the group
+    g.attr("transform", zoomTransform.toString());
 
     // Define Zoom
     const zoom = d3.zoom<SVGSVGElement, unknown>()
         .scaleExtent([0.1, 3])
         .on("zoom", (event) => {
+          // Prevent infinite loop by checking if transform actually changed
+          if (event.transform.k === zoomTransform.k && 
+              event.transform.x === zoomTransform.x && 
+              event.transform.y === zoomTransform.y) return;
+
           g.attr("transform", event.transform);
           setZoomTransform(event.transform);
         });
 
     svg.call(zoom);
-    zoomRef.current = zoom;
-    
-    if (zoomTransform !== d3.zoomIdentity) {
-         svg.call(zoom.transform, zoomTransform);
-    } else {
-         svg.call(zoom.transform, d3.zoomIdentity.translate(margin.left + width/2, 50));
+    // Do not call zoom.transform here to avoid firing the event and causing a loop.
+    // We just let D3 internal state be what it is, or we'd need to set it silently which isn't easy.
+    // However, to ensure D3's internal state matches our state, we can do this on mount only, or verify.
+    // For now, we assume the user interaction drives the state.
+    // But if we want buttons to work, we need to sync.
+    // We can sync by assigning the transform property to the selection node directly if needed.
+    // Re-binding the transform to the element:
+    if (svg.node()) {
+        // @ts-ignore
+        d3.zoomTransform(svg.node()).k = zoomTransform.k;
+        // @ts-ignore
+        d3.zoomTransform(svg.node()).x = zoomTransform.x;
+        // @ts-ignore
+        d3.zoomTransform(svg.node()).y = zoomTransform.y;
     }
+    
+    zoomRef.current = zoom;
 
     // Declare the tree layout
     let treemap;
@@ -183,35 +227,17 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         .range(["#1e293b", "#cbd5e1"]);
 
     // Create a lookup for nodes
-    const nodeMap = new Map<string, d3.HierarchyPointNode<FamilyMember>>();
+    nodeMapRef.current.clear();
     nodes.descendants().forEach(d => {
-      nodeMap.set(d.data.id, d);
+      nodeMapRef.current.set(d.data.id, d);
     });
     
-    // Update selected node position
-    if (selectedId) {
-        const sNode = nodeMap.get(selectedId);
-        if (sNode) {
-            const t = zoomTransform;
-            const x = orientation === 'horizontal' ? sNode.y : sNode.x;
-            const y = orientation === 'horizontal' ? sNode.x : sNode.y;
-            setSelectedNodePos({
-                x: t.x + x * t.k + margin.left,
-                y: t.y + y * t.k + margin.top
-            });
-        } else {
-            setSelectedNodePos(null);
-        }
-    } else {
-        setSelectedNodePos(null);
-    }
-
     // Prepare extra connection links
     const extraLinks: { source: d3.HierarchyPointNode<FamilyMember>; target: d3.HierarchyPointNode<FamilyMember>; label: string }[] = [];
     nodes.descendants().forEach(sourceNode => {
       if (sourceNode.data.connections) {
         sourceNode.data.connections.forEach(conn => {
-          const targetNode = nodeMap.get(conn.targetId);
+          const targetNode = nodeMapRef.current.get(conn.targetId);
           if (targetNode) {
             extraLinks.push({
               source: sourceNode,
@@ -223,27 +249,42 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       }
     });
 
-    // Link Generators
-    let linkGenerator: any;
-    if (linkStyle === 'curved') {
-       if (orientation === 'horizontal') {
-         linkGenerator = d3.linkHorizontal<d3.HierarchyPointLink<FamilyMember>, d3.HierarchyPointNode<FamilyMember>>()
-            .x((d) => d.y)
-            .y((d) => d.x);
-       } else {
-         linkGenerator = d3.linkVertical<d3.HierarchyPointLink<FamilyMember>, d3.HierarchyPointNode<FamilyMember>>()
-            .x((d) => d.x)
-            .y((d) => d.y);
-       }
-    } else {
-       linkGenerator = (d: d3.HierarchyPointLink<FamilyMember>) => {
-          if (orientation === 'horizontal') {
-             return `M${d.source.y},${d.source.x} L${d.source.y},${d.target.x} L${d.target.y},${d.target.x}`; 
-          } else {
-             return `M${d.source.x},${d.source.y} L${d.target.x},${d.source.y} L${d.target.x},${d.target.y}`;
-          }
-       };
-    }
+    // Custom Link Generator
+    const customLinkGenerator = (d: d3.HierarchyPointLink<FamilyMember> | { source: d3.HierarchyPointNode<FamilyMember>, target: d3.HierarchyPointNode<FamilyMember> }) => {
+        const s = d.source;
+        const t = d.target;
+        
+        if (linkStyle === 'straight') {
+             if (orientation === 'horizontal') {
+                return `M${s.y},${s.x} L${s.y},${t.x} L${t.y},${t.x}`; 
+             } else {
+                return `M${s.x},${s.y} L${t.x},${s.y} L${t.x},${t.y}`;
+             }
+        }
+
+        // Curved Logic
+        let offset = 0;
+        if (preventOverlap) {
+            // Deterministic pseudo-random offset based on ID to separate overlapping lines
+            const idVal = t.data.id ? t.data.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) : 0;
+            // Create 3 lanes: -15, 0, +15
+            offset = ((idVal % 3) - 1) * 20; 
+        }
+
+        if (orientation === 'horizontal') {
+            const mx = (s.y + t.y) / 2;
+            return `M ${s.y} ${s.x} 
+                    C ${mx} ${s.x + offset}, 
+                      ${mx} ${t.x + offset}, 
+                      ${t.y} ${t.x}`;
+        } else {
+            const my = (s.y + t.y) / 2;
+            return `M ${s.x} ${s.y} 
+                    C ${s.x + offset} ${my}, 
+                      ${t.x + offset} ${my}, 
+                      ${t.x} ${t.y}`;
+        }
+    };
 
     // *** CRITICAL CHANGE: Filter out links originating from SystemRoot ***
     const visibleLinks = nodes.links().filter(d => d.source.data.relation !== 'SystemRoot');
@@ -253,7 +294,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .data(extraLinks)
       .enter().append("path")
       .attr("class", "extra-link")
-      .attr("d", linkGenerator)
+      .attr("d", customLinkGenerator)
       .attr("fill", "none")
       .attr("stroke", colors.linkExtra) 
       .attr("stroke-width", "2px")
@@ -270,7 +311,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .data(visibleLinks)
       .enter().append("path")
       .attr("class", "link")
-      .attr("d", linkGenerator)
+      .attr("d", customLinkGenerator)
       .attr("fill", "none")
       .attr("stroke", (d: d3.HierarchyPointLink<FamilyMember>) => {
           if (hasHighlight && highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id)) {
@@ -306,6 +347,16 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         if(d.data.relation === 'SystemRoot') return;
         onNodeClick(d.data);
         event.stopPropagation();
+      })
+      .on("dblclick", (event, d: d3.HierarchyPointNode<FamilyMember>) => {
+          if(d.data.relation === 'SystemRoot') return;
+          onOpenDetails(d.data);
+          event.stopPropagation();
+      })
+      .on("contextmenu", (event, d: d3.HierarchyPointNode<FamilyMember>) => {
+          event.preventDefault();
+          if(d.data.relation === 'SystemRoot') return;
+          onNodeClick(d.data); 
       })
       .style("opacity", (d: d3.HierarchyPointNode<FamilyMember>) => {
          // *** CRITICAL: Completely hide SystemRoot ***
@@ -469,9 +520,62 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         }
     });
 
-  }, [data, dimensions, onNodeClick, selectedId, orientation, linkStyle, theme, highlightedIds, heatmapMode]);
+    // Keyboard Navigation Listener
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (!selectedId) return;
+        const current = nodeMapRef.current.get(selectedId);
+        if (!current) return;
+        
+        let nextNode: d3.HierarchyPointNode<FamilyMember> | undefined;
 
-  // Handlers (handleZoom, handleFit, handleDownloadSVG) remain the same...
+        switch(e.key) {
+            case 'ArrowLeft': // Go to Parent
+                if(current.parent) nextNode = current.parent;
+                break;
+            case 'ArrowRight': // Go to First Child
+                if(current.children && current.children.length > 0) nextNode = current.children[0];
+                break;
+            case 'ArrowUp': // Go to Prev Sibling
+                if (current.parent && current.parent.children) {
+                    const idx = current.parent.children.indexOf(current);
+                    if (idx > 0) nextNode = current.parent.children[idx - 1];
+                }
+                break;
+            case 'ArrowDown': // Go to Next Sibling
+                 if (current.parent && current.parent.children) {
+                    const idx = current.parent.children.indexOf(current);
+                    if (idx < current.parent.children.length - 1) nextNode = current.parent.children[idx + 1];
+                }
+                break;
+            case 'Enter':
+                onOpenDetails(current.data);
+                break;
+        }
+
+        if (nextNode && nextNode.data.relation !== 'SystemRoot') {
+            e.preventDefault();
+            onNodeClick(nextNode.data);
+            
+            // Auto Pan/Zoom to new node
+            const t = zoomTransform;
+            const targetX = orientation === 'horizontal' ? nextNode.y : nextNode.x;
+            const targetY = orientation === 'horizontal' ? nextNode.x : nextNode.y;
+            
+            if (svgRef.current && zoomRef.current) {
+                 d3.select(svgRef.current)
+                   .transition()
+                   .duration(300)
+                   .call(zoomRef.current.translateTo, targetX + margin.left, targetY + margin.top);
+            }
+        }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+
+  }, [data, dimensions, onNodeClick, onOpenDetails, selectedId, orientation, linkStyle, preventOverlap, theme, highlightedIds, heatmapMode]); // Removed zoomTransform
+
+  // Handlers (handleZoom, handleFit, handleDownloadSVG)
   const handleZoom = (factor: number) => {
       if (svgRef.current && zoomRef.current) {
           d3.select(svgRef.current)
@@ -508,35 +612,46 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   return (
     <div ref={wrapperRef} className="w-full h-full rounded-2xl overflow-hidden relative">
       
+      {/* Quick Actions Floating Menu - Visible only when a node is selected */}
       {selectedId && selectedNodePos && onAddChild && onAddSibling && (
           <div 
             style={{ 
                 position: 'absolute', 
-                left: selectedNodePos.x + 40, 
-                top: selectedNodePos.y - 20,
-                zIndex: 100
+                left: selectedNodePos.x + 50, 
+                top: selectedNodePos.y - 30,
+                zIndex: 100 // Higher index to float above SVG but below Modal
             }}
-            className="flex flex-col gap-1 animate-in fade-in zoom-in duration-200"
+            className="flex flex-col gap-2 animate-in fade-in zoom-in duration-200"
           >
-              <button onClick={() => onAddChild(selectedId)} className="bg-teal-500 text-white p-1.5 rounded-full shadow-lg hover:bg-teal-600 hover:scale-110 transition-all" title="افزودن فرزند">
-                  <Plus size={14}/>
+              <button onClick={() => onOpenDetails(nodeMapRef.current.get(selectedId)?.data as FamilyMember)} className="bg-slate-700 text-white p-2 rounded-full shadow-lg hover:bg-slate-900 hover:scale-110 transition-all border-2 border-white" title="مشاهده پروفایل کامل">
+                  <User size={16}/>
               </button>
-              <button onClick={() => onAddSibling(selectedId)} className="bg-blue-500 text-white p-1.5 rounded-full shadow-lg hover:bg-blue-600 hover:scale-110 transition-all" title="افزودن هم‌سطح">
-                  <GitBranch size={14}/>
+              <button onClick={() => onAddChild(selectedId)} className="bg-teal-500 text-white p-2 rounded-full shadow-lg hover:bg-teal-600 hover:scale-110 transition-all border-2 border-white" title="افزودن فرزند">
+                  <Plus size={16}/>
+              </button>
+              <button onClick={() => onAddSibling(selectedId)} className="bg-blue-500 text-white p-2 rounded-full shadow-lg hover:bg-blue-600 hover:scale-110 transition-all border-2 border-white" title="افزودن هم‌سطح">
+                  <GitBranch size={16}/>
               </button>
           </div>
       )}
 
+      {/* Floating Toolbar */}
       <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
+          
+          {/* Visual Settings */}
           <div className={`${glassClass} shadow-lg rounded-xl p-1 flex flex-col gap-1 backdrop-blur-md`}>
-             <button onClick={() => setLinkStyle(prev => prev === 'curved' ? 'straight' : 'curved')} className={`p-2 rounded-lg transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50'}`} title="تغییر خطوط">
+             <button onClick={() => setLinkStyle(prev => prev === 'curved' ? 'straight' : 'curved')} className={`p-2 rounded-lg transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50'}`} title="تغییر نوع خطوط">
                   <GitMerge size={20} />
+             </button>
+             <button onClick={() => setPreventOverlap(!preventOverlap)} className={`p-2 rounded-lg transition-colors ${preventOverlap ? 'bg-indigo-100/50 text-indigo-600' : (theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50')}`} title="جلوگیری از تداخل خطوط">
+                  <Route size={20} />
              </button>
              <button onClick={() => setHeatmapMode(!heatmapMode)} className={`p-2 rounded-lg transition-colors ${heatmapMode ? 'bg-orange-100/50 text-orange-600' : (theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50')}`} title="نقشه حرارتی نسل‌ها">
                   <div className="w-5 h-5 rounded bg-gradient-to-br from-slate-800 to-slate-300 border border-white/30"></div>
              </button>
           </div>
 
+          {/* Zoom Controls */}
           <div className={`${glassClass} shadow-lg rounded-xl p-1 flex flex-col gap-1 backdrop-blur-md`}>
               <button onClick={() => handleZoom(1.2)} className={`p-2 rounded-lg transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50'}`} title="بزرگنمایی">
                   <ZoomIn size={20} />
@@ -549,6 +664,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
               </button>
           </div>
 
+          {/* Export */}
           <div className={`${glassClass} shadow-lg rounded-xl p-1 backdrop-blur-md`}>
                <button onClick={handleDownloadSVG} className={`p-2 rounded-lg ${theme === 'dark' ? 'text-teal-400 hover:bg-white/10' : 'text-teal-600 hover:bg-white/50'}`} title="دانلود تصویر">
                   <ImageIcon size={20} />
