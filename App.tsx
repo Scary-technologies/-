@@ -811,7 +811,7 @@ const App: React.FC = () => {
              </div>
 
              <button onClick={handleGetSuggestions} className={`flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors text-sm font-bold shadow-sm hover:shadow ${theme === 'vintage' ? 'bg-[#fdf6e3] text-[#b58900] border-[#d3c6aa]' : 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200'}`}>
-               <Sparkles size={16} /> <span className="hidden md:inline">هوش مصنوعی</span>
+               <Sparkles size={16} /> <span className="hidden md:inline">تحلیل داده</span>
             </button>
             {!isPanelOpen && (
               <button onClick={() => setIsPanelOpen(true)} className="p-2 glass-panel shadow-sm rounded-lg hover:bg-white/60 md:hidden">
@@ -931,7 +931,7 @@ const App: React.FC = () => {
           <div className="absolute top-20 right-6 z-30 glass-panel p-5 rounded-2xl shadow-xl max-w-md animate-in fade-in slide-in-from-top-5">
              <div className="flex justify-between items-start mb-3">
                <h3 className="font-bold text-amber-700 flex items-center gap-2">
-                 <Sparkles size={18} className="text-amber-500"/> هوش مصنوعی
+                 <Sparkles size={18} className="text-amber-500"/> تحلیل هوشمند
                </h3>
                <button onClick={() => setAiSuggestions(null)} className="opacity-50 hover:opacity-100"><X size={16}/></button>
              </div>
@@ -970,7 +970,7 @@ const App: React.FC = () => {
 
       {/* Sidebar Panel */}
       {(!isFullScreen || isPanelOpen) && (
-      <div className={`fixed inset-y-0 left-0 w-full md:w-[28rem] shadow-2xl transform transition-transform duration-500 cubic-bezier(0.32, 0.72, 0, 1) z-40 ${isPanelOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 border-r ${theme === 'dark' ? 'glass-panel-dark border-slate-700' : 'glass-panel border-white/40'}`}>
+      <div className={`fixed inset-y-0 left-0 w-full md:w-[28rem] shadow-2xl transform transition-transform duration-500 cubic-bezier(0.32, 0.72, 0, 1) z-40 ${isPanelOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 border-r flex flex-col ${theme === 'dark' ? 'glass-panel-dark border-slate-700' : 'glass-panel border-white/40'}`}>
         <div className="absolute top-4 left-4 md:hidden z-50">
            <button onClick={() => setIsPanelOpen(false)} className="p-2 bg-white/80 backdrop-blur rounded-full shadow-lg"><X size={20} /></button>
         </div>

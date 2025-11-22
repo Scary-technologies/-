@@ -44,7 +44,6 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
   const [isAddSpouseMode, setIsAddSpouseMode] = useState(false);
   const [spouseType, setSpouseType] = useState<'new' | 'existing'>('new');
   
-  // New Feature States
   const [newTag, setNewTag] = useState('');
   const [newTagColor, setNewTagColor] = useState('#3b82f6');
   const [newEvent, setNewEvent] = useState<Partial<LifeEvent>>({ title: '', date: '' });
@@ -52,7 +51,6 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   
-  // Relationship Calculator State
   const [calcTargetId, setCalcTargetId] = useState<string>('');
   const [calcResult, setCalcResult] = useState<string | null>(null);
   
@@ -311,7 +309,7 @@ ${formData.bio || '---'}
                           <label className="text-xs font-bold opacity-50 block mb-1">جنسیت</label>
                           {editMode ? (
                               <select 
-                                className={inputClass}
+                                className={`${inputClass} cursor-pointer`}
                                 value={formData.gender}
                                 onChange={(e) => handleChange('gender', e.target.value)}
                               >
@@ -333,7 +331,7 @@ ${formData.bio || '---'}
                       <div className={`p-3 rounded-xl ${cardClass}`}>
                           <label className="text-xs font-bold opacity-50 block mb-1">تاریخ تولد</label>
                           {editMode ? (
-                              <input className={`${inputClass} text-left ltr`} value={formData.birthDate || ''} onChange={(e) => handleChange('birthDate', e.target.value)} placeholder="1360/01/01" />
+                              <input dir="ltr" className={`${inputClass} text-left`} value={formData.birthDate || ''} onChange={(e) => handleChange('birthDate', e.target.value)} placeholder="1360/01/01" />
                           ) : (
                               <div className="font-medium dir-ltr text-right">{formData.birthDate || '-'}</div>
                           )}
@@ -341,7 +339,7 @@ ${formData.bio || '---'}
                       <div className={`p-3 rounded-xl ${cardClass}`}>
                           <label className="text-xs font-bold opacity-50 block mb-1">تاریخ وفات</label>
                           {editMode ? (
-                              <input className={`${inputClass} text-left ltr`} value={formData.deathDate || ''} onChange={(e) => handleChange('deathDate', e.target.value)} placeholder="-" />
+                              <input dir="ltr" className={`${inputClass} text-left`} value={formData.deathDate || ''} onChange={(e) => handleChange('deathDate', e.target.value)} placeholder="-" />
                           ) : (
                               <div className="font-medium dir-ltr text-right">{formData.deathDate || '-'}</div>
                           )}
@@ -397,7 +395,7 @@ ${formData.bio || '---'}
                              className="w-full py-2 bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 shadow-lg shadow-orange-200/50 hover:scale-[1.02] transition-all"
                            >
                                {isGenerating ? <span className="animate-spin">⏳</span> : <Sparkles size={16}/>}
-                               نگارش هوشمند با هوش مصنوعی
+                               تولید خودکار با الگوی آماده
                            </button>
                       </div>
                   ) : (
@@ -406,15 +404,6 @@ ${formData.bio || '---'}
                           {formData.bio ? formData.bio : <p className="opacity-50 italic text-center">هنوز زندگینامه‌ای ثبت نشده است.</p>}
                       </div>
                   )}
-                  
-                  {/* Voice Notes Placeholder */}
-                  <div className="mt-6 pt-6 border-t border-dashed border-current opacity-20"></div>
-                  <div className={`rounded-xl p-4 flex items-center justify-center border border-dashed ${isDark ? 'border-slate-700 bg-slate-800/30' : 'border-slate-300 bg-slate-50/50'}`}>
-                      <button className="flex flex-col items-center gap-2 hover:text-teal-500 transition-colors group">
-                          <div className={`w-12 h-12 rounded-full border flex items-center justify-center shadow-sm transition-all group-hover:scale-110 ${isDark ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-200'}`}><Mic size={20}/></div>
-                          <span className="text-xs font-medium opacity-60">ضبط صدا (به زودی)</span>
-                      </button>
-                  </div>
               </div>
           )}
 
@@ -426,7 +415,7 @@ ${formData.bio || '---'}
                            <h4 className="text-xs font-bold opacity-60">افزودن رویداد جدید</h4>
                            <div className="grid grid-cols-2 gap-2">
                                <input placeholder="عنوان" className={inputClass} value={newEvent.title} onChange={e => setNewEvent({...newEvent, title: e.target.value})} />
-                               <input placeholder="تاریخ" className={inputClass} value={newEvent.date} onChange={e => setNewEvent({...newEvent, date: e.target.value})} />
+                               <input dir="ltr" placeholder="تاریخ" className={`${inputClass} text-left`} value={newEvent.date} onChange={e => setNewEvent({...newEvent, date: e.target.value})} />
                            </div>
                            <input placeholder="توضیحات..." className={inputClass} value={newEvent.location || ''} onChange={e => setNewEvent({...newEvent, location: e.target.value})} />
                            <button onClick={handleAddEvent} className="w-full py-2 bg-teal-600 text-white rounded-lg text-sm font-bold shadow hover:bg-teal-500 transition-all">افزودن</button>
@@ -434,7 +423,6 @@ ${formData.bio || '---'}
                    )}
 
                    <div className={`relative border-r-2 mr-2 space-y-8 ${isDark ? 'border-slate-700' : 'border-slate-200'}`}>
-                       {/* Birth */}
                        <div className="relative pr-6">
                            <div className="absolute -right-[9px] top-1 w-4 h-4 rounded-full bg-teal-500 ring-4 ring-white/20 shadow-sm"></div>
                            <span className="text-xs font-mono opacity-50 block mb-1">{formData.birthDate || '---'}</span>
@@ -442,7 +430,6 @@ ${formData.bio || '---'}
                            <div className="text-xs opacity-60">{formData.location}</div>
                        </div>
                        
-                       {/* Custom Events */}
                        {formData.events?.sort((a,b) => a.date.localeCompare(b.date)).map((event) => (
                            <div key={event.id} className="relative pr-6 group hover:translate-x-1 transition-transform">
                                <div className="absolute -right-[9px] top-1 w-4 h-4 rounded-full bg-amber-400 ring-4 ring-white/20 shadow-sm group-hover:scale-125 transition-transform"></div>
@@ -453,7 +440,6 @@ ${formData.bio || '---'}
                            </div>
                        ))}
 
-                       {/* Death */}
                        {formData.deathDate && (
                            <div className="relative pr-6">
                                <div className="absolute -right-[9px] top-1 w-4 h-4 rounded-full bg-slate-500 ring-4 ring-white/20 shadow-sm"></div>
@@ -499,7 +485,6 @@ ${formData.bio || '---'}
           {activeTab === 'relations' && (
             <div className="space-y-6 animate-enter">
                 
-                {/* Actions Grid */}
                 <div className="grid grid-cols-2 gap-3">
                     <button onClick={() => onAddChild(member.id)} className={`${cardClass} p-3 flex flex-col items-center gap-2 hover:border-teal-500 group`}>
                         <div className="bg-teal-100/20 p-2 rounded-full text-teal-600 group-hover:scale-110 transition-transform"><ArrowUp size={20} className="rotate-180"/></div>
@@ -515,7 +500,6 @@ ${formData.bio || '---'}
                     </button>
                 </div>
 
-                {/* Add Spouse Form */}
                 {isAddSpouseMode && (
                     <div className="p-4 rounded-xl border border-pink-200/50 bg-pink-50/50 backdrop-blur-sm animate-fade-in-scale">
                         <h4 className="text-sm font-bold text-pink-600 mb-3 flex items-center gap-2"><Heart size={16}/> ثبت ازدواج</h4>
@@ -544,7 +528,6 @@ ${formData.bio || '---'}
                     </div>
                 )}
 
-                {/* Connections List */}
                 <div className={`${cardClass} p-4 rounded-xl`}>
                     <h4 className="text-xs font-bold opacity-50 mb-3">ارتباطات ویژه (غیر درختی)</h4>
                     <div className="space-y-2 mb-4">
@@ -591,7 +574,6 @@ ${formData.bio || '---'}
                     </div>
                 </div>
                 
-                {/* Calculator */}
                 <div className="p-4 rounded-xl border border-teal-200/50 bg-teal-50/30 backdrop-blur-sm">
                     <h4 className="text-xs font-bold text-teal-700 mb-3 flex items-center gap-2"><Calculator size={14}/> ماشین حساب نسبت‌ها</h4>
                     <div className="flex gap-2 mb-3">
