@@ -1,4 +1,4 @@
-import { HierarchyPointNode } from 'd3';
+import type { HierarchyPointNode } from 'd3';
 
 export interface Connection {
   targetId: string;
@@ -30,6 +30,7 @@ export interface FamilyMember {
   id: string;
   name: string;
   relation?: string; // e.g., Father, Mother, Self
+  code?: string; // Unique ID code
   birthDate?: string;
   deathDate?: string;
   location?: string;

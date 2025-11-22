@@ -4,7 +4,7 @@ import { FamilyMember, AppTheme } from './types';
 import FamilyTree from './components/FamilyTree';
 import MemberPanel from './components/MemberPanel';
 import { suggestResearch } from './services/geminiService';
-import { Sparkles, Menu, X, Search, Download, Upload, BarChart3, Clock, User, Palette, AlertTriangle, Maximize, Minimize, FileText, Filter } from 'lucide-react';
+import { Sparkles, Menu, X, Search, Download, Upload, BarChart3, Clock, User, Palette, AlertTriangle, Maximize, Minimize, FileText, Filter, Calculator } from 'lucide-react';
 
 // Historical Context Data (Persian/World History)
 const historicalEvents = [
@@ -31,6 +31,7 @@ const complexFamilyData: FamilyMember = {
       name: 'حاج رضا بزرگ‌نیا',
       relation: 'Root',
       gender: 'male',
+      code: 'A10001',
       birthDate: '1250',
       deathDate: '1320',
       location: 'تبریز',
@@ -43,6 +44,7 @@ const complexFamilyData: FamilyMember = {
           name: 'میرزا احمد',
           relation: 'Son',
           gender: 'male',
+          code: 'A10002',
           birthDate: '1280',
           children: [
             {
@@ -50,6 +52,7 @@ const complexFamilyData: FamilyMember = {
               name: 'پروین',
               relation: 'Daughter',
               gender: 'female',
+              code: 'A10003',
               birthDate: '1310',
               children: [
                 {
@@ -57,6 +60,7 @@ const complexFamilyData: FamilyMember = {
                   name: 'فرهاد',
                   relation: 'Son',
                   gender: 'male',
+                  code: 'A10004',
                   birthDate: '1335',
                   children: [
                     {
@@ -64,6 +68,7 @@ const complexFamilyData: FamilyMember = {
                       name: 'آرش',
                       relation: 'Son',
                       gender: 'male',
+                      code: 'A10005',
                       birthDate: '1360',
                       occupation: 'مهندس نرم‌افزار',
                       children: [
@@ -72,6 +77,7 @@ const complexFamilyData: FamilyMember = {
                           name: 'باران',
                           relation: 'Daughter',
                           gender: 'female',
+                          code: 'A10006',
                           birthDate: '1390',
                           children: [
                              {
@@ -79,6 +85,7 @@ const complexFamilyData: FamilyMember = {
                                 name: 'نیکان',
                                 relation: 'Son',
                                 gender: 'male',
+                                code: 'A10007',
                                 birthDate: '1402',
                                 tags: [{id: 'newborn', label: 'نسل هفتم', color: '#3b82f6'}]
                              }
@@ -97,6 +104,7 @@ const complexFamilyData: FamilyMember = {
           name: 'اقدس خانم',
           relation: 'Daughter',
           gender: 'female',
+          code: 'A10008',
           birthDate: '1285',
           connections: [
              { targetId: 'root_3_son', label: 'همسر (از خاندان راد)' } // Marriage to Clan 3
@@ -112,6 +120,7 @@ const complexFamilyData: FamilyMember = {
       name: 'میرزا یحیی حکمت',
       relation: 'Root',
       gender: 'male',
+      code: 'B20001',
       birthDate: '1260',
       location: 'شیراز',
       occupation: 'خطاط و شاعر',
@@ -122,6 +131,7 @@ const complexFamilyData: FamilyMember = {
           name: 'فروغ',
           relation: 'Daughter',
           gender: 'female',
+          code: 'B20002',
           birthDate: '1290',
           children: [
              {
@@ -129,11 +139,12 @@ const complexFamilyData: FamilyMember = {
                 name: 'سیاوش',
                 relation: 'Son',
                 gender: 'male',
+                code: 'B20003',
                 birthDate: '1315',
                 connections: [
                     { targetId: 'gen3_1', label: 'همسر (ازدواج با نوه بزرگ‌نیا)' } // Marriage to Clan 1
                 ],
-                children: [] // Their children would typically be listed under the father or cross-referenced
+                children: []
              }
           ]
         }
@@ -146,6 +157,7 @@ const complexFamilyData: FamilyMember = {
       name: 'سرهنگ راد',
       relation: 'Root',
       gender: 'male',
+      code: 'C30001',
       birthDate: '1255',
       location: 'تهران',
       occupation: 'نظامی',
@@ -156,6 +168,7 @@ const complexFamilyData: FamilyMember = {
              name: 'جهانگیر خان',
              relation: 'Son',
              gender: 'male',
+             code: 'C30002',
              birthDate: '1282',
              children: [
                  {
@@ -163,6 +176,7 @@ const complexFamilyData: FamilyMember = {
                      name: 'شیرین',
                      gender: 'female',
                      relation: 'Daughter',
+                     code: 'C30003',
                      birthDate: '1310',
                      children: []
                  }
@@ -171,6 +185,16 @@ const complexFamilyData: FamilyMember = {
       ]
     }
   ]
+};
+
+// Helper to generate unique 6-char code
+const generateUniqueCode = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
 };
 
 const App: React.FC = () => {
@@ -188,6 +212,12 @@ const App: React.FC = () => {
   const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
   const [isFullScreen, setIsFullScreen] = useState(false);
   
+  // Relationship Calculator Modal
+  const [showRelCalc, setShowRelCalc] = useState(false);
+  const [relCode1, setRelCode1] = useState('');
+  const [relCode2, setRelCode2] = useState('');
+  const [relCalcResult, setRelCalcResult] = useState<string | null>(null);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Apply theme to body class
@@ -195,12 +225,23 @@ const App: React.FC = () => {
       document.body.className = `theme-${theme}`;
   }, [theme]);
 
-  // Helpers and logic same as before...
+  // Recursive helpers
   const findNode = useCallback((node: FamilyMember, id: string): FamilyMember | null => {
     if (node.id === id) return node;
     if (node.children) {
       for (const child of node.children) {
         const found = findNode(child, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  }, []);
+  
+  const findNodeByCode = useCallback((node: FamilyMember, code: string): FamilyMember | null => {
+    if (node.code === code) return node;
+    if (node.children) {
+      for (const child of node.children) {
+        const found = findNodeByCode(child, code);
         if (found) return found;
       }
     }
@@ -236,6 +277,7 @@ const App: React.FC = () => {
         name: 'فرزند جدید',
         gender: 'male',
         relation: 'Child',
+        code: generateUniqueCode(),
         children: []
       };
       return {
@@ -271,6 +313,7 @@ const App: React.FC = () => {
               name: 'سرشاخه جدید',
               gender: 'male',
               relation: 'Root',
+              code: generateUniqueCode(),
               children: []
           };
           const newTree = {
@@ -285,6 +328,7 @@ const App: React.FC = () => {
         name: 'بزرگ‌خاندان (جدید)',
         gender: 'male',
         relation: 'Root',
+        code: generateUniqueCode(),
         children: [currentRoot]
       };
       setTreeData(newRoot);
@@ -350,6 +394,7 @@ const App: React.FC = () => {
               name: spouseName,
               gender: spouseGender,
               relation: 'Spouse',
+              code: generateUniqueCode(),
               children: [] 
           };
 
@@ -517,6 +562,17 @@ const App: React.FC = () => {
     }
     return `نسبت دور (فاصله: ${dist1} بالا، ${dist2} پایین)`;
   };
+  
+  const handleCalculateByCode = () => {
+      if(!relCode1 || !relCode2) return;
+      const m1 = findNodeByCode(treeData, relCode1);
+      const m2 = findNodeByCode(treeData, relCode2);
+      if(m1 && m2) {
+          setRelCalcResult(`${m1.name} و ${m2.name}: ${calculateRelationship(m1.id, m2.id)}`);
+      } else {
+          setRelCalcResult("کد(ها) یافت نشد.");
+      }
+  };
 
   const handleHighlightPath = (memberId: string, direction: 'ancestors' | 'descendants' | 'reset') => {
       if (direction === 'reset') { setHighlightedIds(new Set()); return; }
@@ -589,7 +645,7 @@ const App: React.FC = () => {
   const filteredMembers = useMemo(() => {
     if (!searchQuery) return [];
     return allMembers.filter(m => {
-        const matchesName = m.name.includes(searchQuery) || (m.tags && m.tags.some(t => t.label.includes(searchQuery)));
+        const matchesName = m.name.includes(searchQuery) || (m.tags && m.tags.some(t => t.label.includes(searchQuery))) || (m.code && m.code.includes(searchQuery));
         if (!matchesName) return false;
         if (searchFilter === 'male') return m.gender === 'male';
         if (searchFilter === 'female') return m.gender === 'female';
@@ -677,7 +733,7 @@ const App: React.FC = () => {
                    <Search size={18} className="text-slate-400 ml-2"/>
                    <input 
                      type="text" 
-                     placeholder="نام، برچسب یا مکان..." 
+                     placeholder="نام، کد یا مکان..." 
                      className="bg-transparent outline-none text-sm w-full placeholder:text-slate-400"
                      value={searchQuery}
                      onChange={(e) => { setSearchQuery(e.target.value); setIsSearchOpen(true); }}
@@ -742,8 +798,9 @@ const App: React.FC = () => {
              <div className="h-6 w-px bg-current mx-1 hidden sm:block opacity-20"></div>
 
              <div className={`flex p-1 rounded-lg border hidden sm:flex ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white/40 border-white/50'}`}>
-                 <button onClick={() => setShowTimeline(true)} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100"><Clock size={18} /></button>
-                 <button onClick={() => setShowStats(true)} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100"><BarChart3 size={18} /></button>
+                 <button onClick={() => setShowRelCalc(true)} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100" title="محاسبه‌گر هوشمند"><Calculator size={18} /></button>
+                 <button onClick={() => setShowTimeline(true)} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100" title="تایم‌لاین"><Clock size={18} /></button>
+                 <button onClick={() => setShowStats(true)} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100" title="آمار"><BarChart3 size={18} /></button>
                  <button onClick={toggleFullScreen} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100">{isFullScreen ? <Minimize size={18}/> : <Maximize size={18} />}</button>
              </div>
 
@@ -841,6 +898,32 @@ const App: React.FC = () => {
                     </div>
                 </div>
             </div>
+        )}
+        
+        {/* Relationship Calculator Modal */}
+        {showRelCalc && (
+             <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+                <div className={`${glassClass} rounded-3xl shadow-2xl max-w-md w-full overflow-hidden`}>
+                    <div className="p-5 border-b border-white/20 flex justify-between items-center bg-white/10">
+                        <h3 className={`font-bold text-lg flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}><Calculator size={20} className="text-teal-500"/> محاسبه‌گر هوشمند نسبت</h3>
+                        <button onClick={() => setShowRelCalc(false)} className="hover:bg-white/20 rounded-full p-1 transition-colors"><X size={20}/></button>
+                    </div>
+                    <div className="p-6 space-y-4">
+                        <p className="text-xs opacity-70 mb-2">کد یکتای دو نفر را وارد کنید تا نسبت دقیق آنها محاسبه شود.</p>
+                        <div className="space-y-2">
+                            <input placeholder="کد فرد اول (مثلا A10001)" className="w-full p-3 rounded-xl bg-white/50 border text-center font-mono uppercase" value={relCode1} onChange={e => setRelCode1(e.target.value.toUpperCase())} />
+                            <input placeholder="کد فرد دوم" className="w-full p-3 rounded-xl bg-white/50 border text-center font-mono uppercase" value={relCode2} onChange={e => setRelCode2(e.target.value.toUpperCase())} />
+                        </div>
+                        <button onClick={handleCalculateByCode} className="w-full py-3 bg-teal-600 text-white rounded-xl font-bold shadow-lg hover:bg-teal-700 transition-all">محاسبه کن</button>
+                        
+                        {relCalcResult && (
+                            <div className="mt-4 p-4 bg-teal-50/50 border border-teal-200 rounded-xl text-center font-bold text-teal-800 animate-in slide-in-from-bottom-2">
+                                {relCalcResult}
+                            </div>
+                        )}
+                    </div>
+                </div>
+             </div>
         )}
 
         {/* Suggestions Overlay */}

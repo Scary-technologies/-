@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { FamilyMember, LifeEvent, Tag, VoiceNote } from '../types';
 import { generateBiography } from '../services/geminiService';
-import { User, Calendar, MapPin, Sparkles, Plus, Trash2, Save, Calculator, ArrowUp, GitBranch, Camera, Briefcase, Settings, Network, Flag, Eye, EyeOff, Route, Image as ImageIcon, Mic, Tag as TagIcon, FileText, Play, X, Heart, HeartHandshake } from 'lucide-react';
+import { User, Calendar, MapPin, Sparkles, Plus, Trash2, Save, Calculator, ArrowUp, GitBranch, Camera, Briefcase, Settings, Network, Flag, Eye, EyeOff, Route, Image as ImageIcon, Mic, Tag as TagIcon, FileText, Play, X, Heart, HeartHandshake, Copy } from 'lucide-react';
 
 interface MemberPanelProps {
   member: FamilyMember | null;
@@ -184,12 +183,29 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
   );
 
   const handlePrint = () => {
-    // Print logic remains same
-    const content = `گزارش شجره‌نامه\n----------------\nنام: ${formData.name}\n...`;
+    const content = `
+گزارش شجره‌نامه
+----------------
+نام: ${formData.name}
+تاریخ تولد: ${formData.birthDate || 'نامشخص'}
+تاریخ وفات: ${formData.deathDate || '---'}
+محل: ${formData.location || '---'}
+کد شناسایی: ${formData.code || '---'}
+
+زندگینامه:
+${formData.bio || '---'}
+    `.trim();
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank');
   };
+  
+  const copyCode = () => {
+      if(formData.code) {
+          navigator.clipboard.writeText(formData.code);
+          alert('کد کپی شد');
+      }
+  }
 
   return (
     <div className="h-full flex flex-col backdrop-blur-xl bg-transparent">
@@ -222,8 +238,8 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
             {editMode ? <Save size={20} onClick={handleSave}/> : <Settings size={20}/>}
          </div>
          
-         <div className="absolute top-4 left-4 text-white/70 font-mono text-xs bg-black/20 px-2 py-1 rounded-md backdrop-blur-sm">
-            ID: {formData.id?.substring(0,6)}...
+         <div onClick={copyCode} className="absolute top-4 left-4 text-white/80 font-mono text-xs bg-black/20 px-2 py-1 rounded-md backdrop-blur-sm flex items-center gap-2 cursor-pointer hover:bg-black/30">
+            <Copy size={10}/> {formData.code || 'NO-CODE'}
          </div>
       </div>
 

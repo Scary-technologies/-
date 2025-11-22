@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { FamilyMember, AppTheme } from '../types';
+import { FamilyMember, AppTheme, Tag } from '../types';
 import { Maximize, ZoomIn, ZoomOut, Image as ImageIcon, GitMerge, Plus, GitBranch, Edit3 } from 'lucide-react';
 
 interface FamilyTreeProps {
@@ -221,13 +221,17 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     
     if (linkStyle === 'curved') {
        if (orientation === 'horizontal') {
-         linkGenerator = d3.linkHorizontal<any, any>().x((d) => d.y).y((d) => d.x);
+         linkGenerator = d3.linkHorizontal<d3.HierarchyPointLink<FamilyMember>, d3.HierarchyPointNode<FamilyMember>>()
+            .x((d) => d.y)
+            .y((d) => d.x);
        } else {
-         linkGenerator = d3.linkVertical<any, any>().x((d) => d.x).y((d) => d.y);
+         linkGenerator = d3.linkVertical<d3.HierarchyPointLink<FamilyMember>, d3.HierarchyPointNode<FamilyMember>>()
+            .x((d) => d.x)
+            .y((d) => d.y);
        }
     } else {
        // Straight lines
-       linkGenerator = (d: any) => {
+       linkGenerator = (d: d3.HierarchyPointLink<FamilyMember>) => {
           if (orientation === 'horizontal') {
              return `M${d.source.y},${d.source.x} L${d.source.y},${d.target.x} L${d.target.y},${d.target.x}`; // Orthogonal
           } else {
@@ -260,19 +264,19 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr("class", "link")
       .attr("d", linkGenerator)
       .attr("fill", "none")
-      .attr("stroke", (d) => {
+      .attr("stroke", (d: d3.HierarchyPointLink<FamilyMember>) => {
           if (hasHighlight && highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id)) {
              return colors.selectedRing;
           }
           return colors.link;
       })
-      .attr("stroke-width", (d) => {
+      .attr("stroke-width", (d: d3.HierarchyPointLink<FamilyMember>) => {
          if (hasHighlight && highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id)) {
              return "3px";
          }
          return "1.5px";
       })
-      .style("opacity", (d) => {
+      .style("opacity", (d: d3.HierarchyPointLink<FamilyMember>) => {
          if (!hasHighlight) return 1;
          if (highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id)) return 1;
          return 0.1;
@@ -284,28 +288,28 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .data(nodes.descendants())
       .enter().append("g")
       .attr("class", "node")
-      .attr("transform", (d) => {
+      .attr("transform", (d: d3.HierarchyPointNode<FamilyMember>) => {
           return orientation === 'horizontal' 
             ? "translate(" + d.y + "," + d.x + ")"
             : "translate(" + d.x + "," + d.y + ")";
       })
       .style("cursor", "pointer")
-      .on("click", (event, d) => {
+      .on("click", (event, d: d3.HierarchyPointNode<FamilyMember>) => {
         if(d.data.relation === 'SystemRoot') return;
         onNodeClick(d.data);
         event.stopPropagation();
       })
-      .style("opacity", (d) => {
+      .style("opacity", (d: d3.HierarchyPointNode<FamilyMember>) => {
          if (d.data.relation === 'SystemRoot') return 0;
          if (!hasHighlight) return 1;
          return highlightedIds.has(d.data.id) ? 1 : 0.2; 
       })
       .style("transition", "opacity 0.4s ease")
-      .style("pointer-events", (d) => d.data.relation === 'SystemRoot' ? 'none' : 'all');
+      .style("pointer-events", (d: d3.HierarchyPointNode<FamilyMember>) => d.data.relation === 'SystemRoot' ? 'none' : 'all');
 
 
     // 1. Selected State Ring
-    node.filter(d => d.data.id === selectedId)
+    node.filter((d: d3.HierarchyPointNode<FamilyMember>) => d.data.id === selectedId)
         .append("circle")
         .attr("r", 34)
         .attr("fill", "none")
@@ -317,7 +321,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     // 2. Main Circle Background (Gradient or Heatmap)
     node.append("circle")
       .attr("r", 26)
-      .style("fill", (d) => {
+      .style("fill", (d: d3.HierarchyPointNode<FamilyMember>) => {
           if (heatmapMode) {
              return heatmapColorScale(d.depth);
           }
@@ -328,7 +332,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .classed("drop-shadow-md", true);
 
     // 3. Clip Path for Image
-    node.each(function(d, i) {
+    node.each(function(d: d3.HierarchyPointNode<FamilyMember>, i) {
         if (d.data.imageUrl) {
              defs.append("clipPath")
                 .attr("id", "clip-circle-" + i)
@@ -338,9 +342,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     });
 
     // 4. Image Overlay
-    node.filter(d => !!d.data.imageUrl && !heatmapMode)
+    node.filter((d: d3.HierarchyPointNode<FamilyMember>) => !!d.data.imageUrl && !heatmapMode)
         .append("image")
-        .attr("xlink:href", d => d.data.imageUrl || '')
+        .attr("xlink:href", (d: d3.HierarchyPointNode<FamilyMember>) => d.data.imageUrl || '')
         .attr("x", -26)
         .attr("y", -26)
         .attr("width", 52)
@@ -364,7 +368,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     node.append("text")
       .attr("dy", orientation === 'horizontal' ? "49" : "49")
       .style("text-anchor", "middle")
-      .text((d) => d.data.name)
+      .text((d: d3.HierarchyPointNode<FamilyMember>) => d.data.name)
       .style("font-family", theme === 'vintage' ? 'Noto Naskh Arabic' : 'Vazirmatn')
       .style("font-size", "12px")
       .style("font-weight", "bold")
@@ -374,22 +378,22 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     node.append("text")
       .attr("dy", orientation === 'horizontal' ? "64" : "64")
       .style("text-anchor", "middle")
-      .text((d) => d.data.relation || '')
+      .text((d: d3.HierarchyPointNode<FamilyMember>) => d.data.relation || '')
       .style("font-family", theme === 'vintage' ? 'Noto Naskh Arabic' : 'Vazirmatn')
       .style("font-size", "10px")
       .style("fill", colors.textSecondary);
       
     // 8. Tag Indicators (Dots)
-    node.each(function(d) {
+    node.each(function(d: d3.HierarchyPointNode<FamilyMember>) {
         if (d.data.tags && d.data.tags.length > 0) {
             d3.select(this).selectAll(".tag-dot")
               .data(d.data.tags.slice(0, 3)) // Limit to 3
               .enter().append("circle")
               .attr("class", "tag-dot")
               .attr("r", 3)
-              .attr("cx", (tag, i) => -15 + (i * 10))
+              .attr("cx", (tag: Tag, i) => -15 + (i * 10))
               .attr("cy", -32)
-              .attr("fill", (tag) => tag.color);
+              .attr("fill", (tag: Tag) => tag.color);
         }
     });
 
