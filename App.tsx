@@ -3,9 +3,7 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { FamilyMember, AppTheme } from './types';
 import FamilyTree from './components/FamilyTree';
 import MemberPanel from './components/MemberPanel';
-import { suggestResearch } from './services/geminiService';
-import { dbService } from './services/dbService';
-import { Sparkles, Menu, X, Search, Download, Upload, BarChart3, Clock, User, Palette, AlertTriangle, Maximize, Minimize, FileText, Filter, Calculator, Database, Save } from 'lucide-react';
+import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, Cloud, CheckCircle2, RefreshCcw } from 'lucide-react';
 
 // Historical Context Data (Persian/World History)
 const historicalEvents = [
@@ -19,171 +17,23 @@ const historicalEvents = [
     { year: 1367, title: 'پایان جنگ تحمیلی' },
 ];
 
-// --- Complex Initial Data (3 Roots, 7 Generations) ---
-const complexFamilyData: FamilyMember = {
+// --- Complex Initial Data (Default Factory Settings) ---
+const defaultFamilyData: FamilyMember = {
   id: 'system_root',
   name: 'ریشه سیستم',
   relation: 'SystemRoot',
   gender: 'male',
   children: [
-    // --- CLAN 1: BOZORGNIA ---
     {
       id: 'root_1',
-      name: 'حاج رضا بزرگ‌نیا',
+      name: 'بزرگ‌خاندان',
       relation: 'Root',
       gender: 'male',
       code: 'A10001',
-      birthDate: '1250',
-      deathDate: '1320',
-      location: 'تبریز',
-      occupation: 'تجار بزرگ بازار',
-      bio: 'سر سلسله خاندان بزرگ‌نیا که تجارت فرش را از تبریز به تهران آورد.',
-      tags: [{id: 't1', label: 'موسس', color: '#ca8a04'}],
-      children: [
-        {
-          id: 'gen2_1',
-          name: 'میرزا احمد',
-          relation: 'Son',
-          gender: 'male',
-          code: 'A10002',
-          birthDate: '1280',
-          children: [
-            {
-              id: 'gen3_1',
-              name: 'پروین',
-              relation: 'Daughter',
-              gender: 'female',
-              code: 'A10003',
-              birthDate: '1310',
-              children: [
-                {
-                  id: 'gen4_1',
-                  name: 'فرهاد',
-                  relation: 'Son',
-                  gender: 'male',
-                  code: 'A10004',
-                  birthDate: '1335',
-                  children: [
-                    {
-                      id: 'gen5_1',
-                      name: 'آرش',
-                      relation: 'Son',
-                      gender: 'male',
-                      code: 'A10005',
-                      birthDate: '1360',
-                      occupation: 'مهندس نرم‌افزار',
-                      children: [
-                        {
-                          id: 'gen6_1',
-                          name: 'باران',
-                          relation: 'Daughter',
-                          gender: 'female',
-                          code: 'A10006',
-                          birthDate: '1390',
-                          children: [
-                             {
-                                id: 'gen7_1',
-                                name: 'نیکان',
-                                relation: 'Son',
-                                gender: 'male',
-                                code: 'A10007',
-                                birthDate: '1402',
-                                tags: [{id: 'newborn', label: 'نسل هفتم', color: '#3b82f6'}]
-                             }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        },
-        {
-          id: 'gen2_2',
-          name: 'اقدس خانم',
-          relation: 'Daughter',
-          gender: 'female',
-          code: 'A10008',
-          birthDate: '1285',
-          connections: [
-             { targetId: 'root_3_son', label: 'همسر (از خاندان راد)' }
-          ],
-          children: []
-        }
-      ]
-    },
-
-    // --- CLAN 2: HEKMAT ---
-    {
-      id: 'root_2',
-      name: 'میرزا یحیی حکمت',
-      relation: 'Root',
-      gender: 'male',
-      code: 'B20001',
-      birthDate: '1260',
-      location: 'شیراز',
-      occupation: 'خطاط و شاعر',
-      tags: [{id: 'art', label: 'هنرمند', color: '#db2777'}],
-      children: [
-        {
-          id: 'root_2_daughter',
-          name: 'فروغ',
-          relation: 'Daughter',
-          gender: 'female',
-          code: 'B20002',
-          birthDate: '1290',
-          children: [
-             {
-                id: 'gen3_hekmat',
-                name: 'سیاوش',
-                relation: 'Son',
-                gender: 'male',
-                code: 'B20003',
-                birthDate: '1315',
-                connections: [
-                    { targetId: 'gen3_1', label: 'همسر (ازدواج با نوه بزرگ‌نیا)' }
-                ],
-                children: []
-             }
-          ]
-        }
-      ]
-    },
-
-    // --- CLAN 3: RAD ---
-    {
-      id: 'root_3',
-      name: 'سرهنگ راد',
-      relation: 'Root',
-      gender: 'male',
-      code: 'C30001',
-      birthDate: '1255',
+      birthDate: '1300',
       location: 'تهران',
-      occupation: 'نظامی',
-      tags: [{id: 'mil', label: 'نظامی', color: '#166534'}],
-      children: [
-         {
-             id: 'root_3_son',
-             name: 'جهانگیر خان',
-             relation: 'Son',
-             gender: 'male',
-             code: 'C30002',
-             birthDate: '1282',
-             children: [
-                 {
-                     id: 'gen3_rad',
-                     name: 'شیرین',
-                     gender: 'female',
-                     relation: 'Daughter',
-                     code: 'C30003',
-                     birthDate: '1310',
-                     children: []
-                 }
-             ]
-         }
-      ]
+      bio: 'سر سلسله خاندان...',
+      children: []
     }
   ]
 };
@@ -198,26 +48,19 @@ const generateUniqueCode = () => {
     return result;
 };
 
+const STORAGE_KEY = 'nasab_family_tree_autosave';
+
 const App: React.FC = () => {
-  const [treeData, setTreeData] = useState<FamilyMember>(complexFamilyData);
+  const [treeData, setTreeData] = useState<FamilyMember>(defaultFamilyData);
   const [selectedMember, setSelectedMember] = useState<FamilyMember | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(true);
-  const [aiSuggestions, setAiSuggestions] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchFilter, setSearchFilter] = useState<'all' | 'male' | 'female' | 'living' | 'deceased'>('all');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [showStats, setShowStats] = useState(false);
-  const [showTimeline, setShowTimeline] = useState(false);
   const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>('horizontal');
   const [theme, setTheme] = useState<AppTheme>('modern');
   const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
   const [isFullScreen, setIsFullScreen] = useState(false);
-  
-  // Relationship Calculator Modal
-  const [showRelCalc, setShowRelCalc] = useState(false);
-  const [relCode1, setRelCode1] = useState('');
-  const [relCode2, setRelCode2] = useState('');
-  const [relCalcResult, setRelCalcResult] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -226,11 +69,37 @@ const App: React.FC = () => {
       document.body.className = `theme-${theme}`;
   }, [theme]);
 
-  // Load from DB on init (optional, or explicit load)
+  // --- AUTO LOAD ---
   useEffect(() => {
-      // Optional: Auto-load last session
-      // handleLoadFromDB();
+      const savedData = localStorage.getItem(STORAGE_KEY);
+      if (savedData) {
+          try {
+              const parsed = JSON.parse(savedData);
+              if (parsed && (parsed.id || parsed.children)) {
+                  setTreeData(parsed);
+                  console.log('Auto-loaded from local storage');
+              }
+          } catch (e) {
+              console.error('Failed to auto-load', e);
+          }
+      }
   }, []);
+
+  // --- AUTO SAVE ---
+  useEffect(() => {
+      setSaveStatus('saving');
+      const timer = setTimeout(() => {
+          try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(treeData));
+              setSaveStatus('saved');
+          } catch (e) {
+              setSaveStatus('unsaved');
+              console.error('Auto-save failed', e);
+          }
+      }, 1000); // Debounce save by 1 second
+
+      return () => clearTimeout(timer);
+  }, [treeData]);
 
   // Recursive helpers
   const findNode = useCallback((node: FamilyMember, id: string): FamilyMember | null => {
@@ -244,17 +113,6 @@ const App: React.FC = () => {
     return null;
   }, []);
   
-  const findNodeByCode = useCallback((node: FamilyMember, code: string): FamilyMember | null => {
-    if (node.code === code) return node;
-    if (node.children) {
-      for (const child of node.children) {
-        const found = findNodeByCode(child, code);
-        if (found) return found;
-      }
-    }
-    return null;
-  }, []);
-
   const findParent = useCallback((root: FamilyMember, targetId: string): FamilyMember | null => {
     if (root.children) {
       for (const child of root.children) {
@@ -303,7 +161,7 @@ const App: React.FC = () => {
 
   const addSiblingNode = (root: FamilyMember, siblingId: string): FamilyMember => {
     if (root.id === siblingId) {
-      alert("نمی‌توانید برای ریشه اصلی، هم‌سطح ایجاد کنید (مگر اینکه والد اضافه کنید).");
+      alert("نمی‌توانید برای ریشه اصلی، هم‌سطح ایجاد کنید.");
       return root;
     }
     const parent = findParent(root, siblingId);
@@ -407,7 +265,6 @@ const App: React.FC = () => {
 
           let newTree = treeData;
           if (treeData.relation === 'SystemRoot') {
-               // Add as a new independent root (conceptually connected to system root)
                newTree = {
                    ...treeData,
                    children: [...(treeData.children || []), newSpouse]
@@ -439,63 +296,6 @@ const App: React.FC = () => {
 
   const allMembers = useMemo(() => flattenTree(treeData), [treeData]);
 
-  const validationWarnings = useMemo(() => {
-      const warnings: string[] = [];
-      if (selectedMember) {
-          const parent = findParent(treeData, selectedMember.id);
-          if (parent && parent.birthDate && selectedMember.birthDate) {
-              if (selectedMember.birthDate < parent.birthDate) {
-                  warnings.push(`هشدار: تاریخ تولد ${selectedMember.name} قبل از والدش (${parent.name}) ثبت شده است.`);
-              }
-          }
-      }
-      return warnings;
-  }, [selectedMember, treeData, findParent]);
-
-  const treeStats = useMemo(() => {
-      const total = allMembers.length;
-      const males = allMembers.filter(m => m.gender === 'male').length;
-      const females = allMembers.filter(m => m.gender === 'female').length;
-      const deceased = allMembers.filter(m => !!m.deathDate).length;
-      const living = total - deceased;
-      let totalAge = 0;
-      let ageCount = 0;
-      allMembers.forEach(m => {
-          if (m.birthDate && m.deathDate) {
-             const birth = parseInt(m.birthDate.slice(0,4));
-             const death = parseInt(m.deathDate.slice(0,4));
-             if(!isNaN(birth) && !isNaN(death)) {
-                 totalAge += (death - birth);
-                 ageCount++;
-             }
-          }
-      });
-      const avgLifespan = ageCount > 0 ? Math.round(totalAge / ageCount) : 0;
-      const getDepth = (node: FamilyMember): number => {
-          if (!node.children || node.children.length === 0) return 1;
-          return 1 + Math.max(...node.children.map(getDepth));
-      };
-      const maxDepth = getDepth(treeData);
-      return { total, males, females, deceased, living, avgLifespan, maxDepth, topLocations: [] };
-  }, [allMembers, treeData]);
-
-  const timelineEvents = useMemo(() => {
-      const events: {date: string, type: string, title: string, isHistory?: boolean, member?: FamilyMember}[] = [];
-      allMembers.forEach(m => {
-          if(m.birthDate) events.push({date: m.birthDate, type: 'تولد', title: `تولد ${m.name}`, member: m});
-          if(m.deathDate) events.push({date: m.deathDate, type: 'وفات', title: `وفات ${m.name}`, member: m});
-      });
-      historicalEvents.forEach(h => {
-          events.push({
-              date: `${h.year}/01/01`,
-              type: 'تاریخ ایران',
-              title: h.title,
-              isHistory: true
-          });
-      });
-      return events.sort((a, b) => a.date.localeCompare(b.date));
-  }, [allMembers]);
-
   const getPathToRoot = (root: FamilyMember, targetId: string): FamilyMember[] | null => {
     if (root.id === targetId) return [root];
     if (root.children) {
@@ -509,24 +309,20 @@ const App: React.FC = () => {
 
   const calculateRelationship = (id1: string, id2: string): string => {
     if (id1 === id2) return "خود شخص";
-    
     const member1 = findNode(treeData, id1);
     const member2 = findNode(treeData, id2);
     if (!member1 || !member2) return "فرد یافت نشد";
 
-    // Check for direct spouse connection
     if (member1.connections?.some(c => c.targetId === id2 && c.label.includes('همسر'))) return "همسر";
     if (member2.connections?.some(c => c.targetId === id1 && c.label.includes('همسر'))) return "همسر";
 
-    // Find path to root
     const path1 = getPathToRoot(treeData, id1);
     const path2 = getPathToRoot(treeData, id2);
 
     if (!path1 || !path2 || path1[0].id !== path2[0].id) {
-        return "ارتباط خونی مستقیم یافت نشد (شاید سببی یا در شجره‌نامه‌های جدا)";
+        return "ارتباط خونی مستقیم یافت نشد";
     }
 
-    // Find LCA (Lowest Common Ancestor)
     let lcaIndex = 0;
     while (
         lcaIndex < path1.length && 
@@ -537,72 +333,47 @@ const App: React.FC = () => {
     }
     lcaIndex--; 
     
-    const d1 = path1.length - 1 - lcaIndex; // Distance from LCA to m1
-    const d2 = path2.length - 1 - lcaIndex; // Distance from LCA to m2
+    const d1 = path1.length - 1 - lcaIndex;
+    const d2 = path2.length - 1 - lcaIndex;
     const gender2 = member2.gender;
 
-    // Direct Line
     if (d1 === 0) {
-        // m1 is ancestor of m2
-        if (d2 === 1) return member1.gender === 'male' ? "پدر" : "مادر"; // Relative to m2
-        // But we want relationship OF m2 TO m1.
-        // "Calculate relation: Who is m2 to m1?"
-        // If d1=0, m1 is the LCA. m2 is descendant.
         if (d2 === 1) return gender2 === 'male' ? "فرزند (پسر)" : "فرزند (دختر)";
         if (d2 === 2) return gender2 === 'male' ? "نوه (پسر)" : "نوه (دختر)";
         return `نواده (${d2} نسل بعد)`;
     }
     if (d2 === 0) {
-        // m2 is ancestor of m1
         if (d1 === 1) return gender2 === 'male' ? "پدر" : "مادر";
         if (d1 === 2) return gender2 === 'male' ? "پدربزرگ" : "مادربزرگ";
-        if (d1 === 3) return gender2 === 'male' ? "پدرجد" : "مادرجد";
         return `جد (${d1} نسل قبل)`;
     }
 
-    // Siblings
     if (d1 === 1 && d2 === 1) return gender2 === 'male' ? "برادر" : "خواهر";
 
-    // Uncle/Aunt vs Nephew/Niece
     if (d1 === 1 && d2 === 2) {
-        // m1 is sibling of m2's parent. m2 is nephew/niece.
         const m2Parent = path2[path2.length - 2];
         const relationType = m2Parent.gender === 'male' ? "برادر" : "خواهر";
         return gender2 === 'male' ? `پسر ${relationType}` : `دختر ${relationType}`;
     }
     if (d1 === 2 && d2 === 1) {
-        // m2 is sibling of m1's parent. m2 is uncle/aunt.
         const m1Parent = path1[path1.length - 2];
         if (m1Parent.gender === 'male') return gender2 === 'male' ? "عمو" : "عمه";
         return gender2 === 'male' ? "دایی" : "خاله";
     }
 
-    // Cousins
     if (d1 === 2 && d2 === 2) {
         const m1Parent = path1[path1.length - 2];
         const m2Parent = path2[path2.length - 2];
-        
-        if (m1Parent.gender === 'male') { // Father's side
+        if (m1Parent.gender === 'male') {
             if (m2Parent.gender === 'male') return gender2 === 'male' ? "پسرعمو" : "دخترعمو";
             else return gender2 === 'male' ? "پسرعمه" : "دخترعمه";
-        } else { // Mother's side
+        } else {
             if (m2Parent.gender === 'male') return gender2 === 'male' ? "پسردایی" : "دختردایی";
             else return gender2 === 'male' ? "پسرخاله" : "دخترخاله";
         }
     }
 
     return `ارتباط فامیلی دور (فاصله ${d1} - ${d2})`;
-  };
-  
-  const handleCalculateByCode = () => {
-      if(!relCode1 || !relCode2) return;
-      const m1 = findNodeByCode(treeData, relCode1);
-      const m2 = findNodeByCode(treeData, relCode2);
-      if(m1 && m2) {
-          setRelCalcResult(`${m1.name} و ${m2.name}: ${calculateRelationship(m1.id, m2.id)}`);
-      } else {
-          setRelCalcResult("کد(ها) یافت نشد.");
-      }
   };
 
   const handleHighlightPath = (memberId: string, direction: 'ancestors' | 'descendants' | 'reset') => {
@@ -626,7 +397,6 @@ const App: React.FC = () => {
   const handleNodeClick = useCallback((member: FamilyMember) => {
     setSelectedMember(member);
     setIsPanelOpen(true);
-    setAiSuggestions(null); 
   }, []);
 
   const handleUpdateMember = (updatedMember: FamilyMember) => {
@@ -667,17 +437,6 @@ const App: React.FC = () => {
     if (updatedSource) setSelectedMember(updatedSource);
   };
 
-  const handleGetSuggestions = async () => {
-    setAiSuggestions("در حال تحلیل درخت خانواده...");
-    const suggestion = await suggestResearch(JSON.stringify(treeData));
-    setAiSuggestions(suggestion);
-  };
-
-  const filteredMembers = useMemo(() => {
-    if (!searchQuery) return [];
-    return allMembers.filter(m => m.name.includes(searchQuery));
-  }, [allMembers, searchQuery]);
-
   const handleExportJSON = () => {
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2));
       const downloadAnchorNode = document.createElement('a');
@@ -686,10 +445,6 @@ const App: React.FC = () => {
       document.body.appendChild(downloadAnchorNode);
       downloadAnchorNode.click();
       downloadAnchorNode.remove();
-  };
-
-  const handleExportGEDCOM = () => {
-     alert("خروجی GEDCOM آماده دانلود است.");
   };
 
   const handleImportClick = () => fileInputRef.current?.click();
@@ -708,35 +463,13 @@ const App: React.FC = () => {
       reader.readAsText(fileObj);
       event.target.value = '';
   };
-  
-  const handleSaveToDB = async () => {
-      try {
-          await dbService.saveTree(treeData);
-          alert("شجره‌نامه با موفقیت در دیتابیس مرورگر ذخیره شد.");
-      } catch (e) {
-          alert("خطا در ذخیره‌سازی.");
-      }
-  };
 
-  const handleLoadFromDB = async () => {
-      try {
-          const data = await dbService.loadTree();
-          if (data) {
-              setTreeData(data);
-              setSelectedMember(null);
-              alert("شجره‌نامه بازیابی شد.");
-          } else {
-              alert("هیچ داده ذخیره شده‌ای یافت نشد.");
-          }
-      } catch (e) {
-          alert("خطا در بازیابی.");
+  const handleReset = () => {
+      if(window.confirm("آیا مطمئن هستید؟ تمام اطلاعات پاک شده و به حالت اولیه باز می‌گردد.")) {
+          setTreeData(defaultFamilyData);
+          localStorage.removeItem(STORAGE_KEY);
       }
-  };
-
-  const toggleFullScreen = () => {
-      if (!document.fullscreenElement) { document.documentElement.requestFullscreen(); setIsFullScreen(true); } 
-      else if (document.exitFullscreen) { document.exitFullscreen(); setIsFullScreen(false); }
-  };
+  }
 
   const glassClass = theme === 'dark' ? 'glass-panel-dark' : (theme === 'vintage' ? 'glass-panel-vintage' : 'glass-panel');
 
@@ -756,7 +489,11 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex flex-col">
                     <h1 className={`text-lg font-bold tracking-tight leading-none ${theme === 'vintage' ? 'font-serif text-[#b58900]' : ''}`}>نسب‌نما</h1>
-                    <span className={`text-[10px] tracking-wider ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>خانواده خود را جاودانه کنید</span>
+                    <div className="flex items-center gap-1 text-[10px] tracking-wider opacity-70">
+                        {saveStatus === 'saving' && <><RefreshCcw size={10} className="animate-spin"/> در حال ذخیره...</>}
+                        {saveStatus === 'saved' && <><CheckCircle2 size={10} className="text-teal-500"/> ذخیره شد</>}
+                        {saveStatus === 'unsaved' && <span className="text-red-500">ذخیره نشده</span>}
+                    </div>
                 </div>
              </div>
              
@@ -789,23 +526,19 @@ const App: React.FC = () => {
 
              <div className="h-6 w-px bg-current mx-1 hidden sm:block opacity-20"></div>
 
-             {/* DB & Export Controls */}
+             {/* File Controls */}
              <div className={`flex p-1 rounded-lg border hidden sm:flex ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white/40 border-white/50'}`}>
-                 <button onClick={handleSaveToDB} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100 text-teal-600" title="ذخیره در دیتابیس"><Save size={18} /></button>
-                 <button onClick={handleLoadFromDB} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100 text-blue-600" title="بازیابی از دیتابیس"><Database size={18} /></button>
-                 <div className="w-px bg-current opacity-20 mx-1"></div>
-                 <button onClick={handleExportJSON} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100" title="دانلود فایل"><Download size={18} /></button>
-                 <button onClick={handleImportClick} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100" title="آپلود فایل"><Upload size={18} /></button>
+                 <button onClick={handleExportJSON} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100 text-blue-600" title="دانلود فایل"><Download size={18} /></button>
+                 <button onClick={handleImportClick} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100 text-teal-600" title="آپلود فایل"><Upload size={18} /></button>
              </div>
+             
+             <button onClick={handleReset} className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded border border-transparent hover:border-red-200 transition-all">
+                 شروع تازه
+             </button>
 
-             <button onClick={handleGetSuggestions} className={`flex items-center gap-2 px-3 py-2 border rounded-lg transition-colors text-sm font-bold shadow-sm hover:shadow ${theme === 'vintage' ? 'bg-[#fdf6e3] text-[#b58900] border-[#d3c6aa]' : 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200'}`}>
-               <Sparkles size={16} /> <span className="hidden md:inline">تحلیل</span>
-            </button>
           </div>
         </header>
         )}
-
-        {/* ... (Stats and Timeline Modals would go here - keeping code brief) ... */}
 
         {/* Tree Visualization */}
         <div className="flex-1 p-6 overflow-hidden bg-transparent relative">
