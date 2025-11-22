@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { FamilyMember, LifeEvent, Tag, VoiceNote } from '../types';
 import { generateBiography } from '../services/geminiService';
@@ -206,7 +207,7 @@ ${formData.bio || '---'}
   }
 
   return (
-    <div className="h-full flex flex-col backdrop-blur-xl bg-transparent">
+    <div className="h-full flex flex-col backdrop-blur-xl bg-transparent overflow-y-auto custom-scrollbar relative">
       {/* Hero Header */}
       <div className={`relative h-40 ${member.gender === 'male' ? 'bg-gradient-to-r from-blue-600/80 to-blue-400/80' : 'bg-gradient-to-r from-pink-600/80 to-pink-400/80'} shrink-0 overflow-hidden`}>
          <div className="absolute inset-0 opacity-30 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] mix-blend-overlay"></div>
@@ -271,8 +272,8 @@ ${formData.bio || '---'}
           </div>
       </div>
 
-      {/* Tabs */}
-      <div className={`flex border-b overflow-x-auto no-scrollbar px-2 sticky top-0 z-20 backdrop-blur-md ${isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-white/40 border-slate-200/50'}`}>
+      {/* Tabs - Sticky Position */}
+      <div className={`flex border-b overflow-x-auto no-scrollbar px-2 sticky top-0 z-30 backdrop-blur-xl ${isDark ? 'bg-slate-900/80 border-slate-700' : 'bg-white/80 border-slate-200/50'}`}>
           {[
               {id: 'info', label: 'اطلاعات', icon: User},
               {id: 'bio', label: 'سرگذشت', icon: FileText},
@@ -299,7 +300,7 @@ ${formData.bio || '---'}
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+      <div className="p-6 pb-20">
           
           {/* INFO TAB */}
           {activeTab === 'info' && (

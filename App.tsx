@@ -439,7 +439,6 @@ const App: React.FC = () => {
 
   const allMembers = useMemo(() => flattenTree(treeData), [treeData]);
 
-  // ... [Calculators, Stats, Timeline Logic remains the same] ...
   const validationWarnings = useMemo(() => {
       const warnings: string[] = [];
       if (selectedMember) {
@@ -510,17 +509,89 @@ const App: React.FC = () => {
 
   const calculateRelationship = (id1: string, id2: string): string => {
     if (id1 === id2) return "خود شخص";
+    
+    const member1 = findNode(treeData, id1);
+    const member2 = findNode(treeData, id2);
+    if (!member1 || !member2) return "فرد یافت نشد";
+
+    // Check for direct spouse connection
+    if (member1.connections?.some(c => c.targetId === id2 && c.label.includes('همسر'))) return "همسر";
+    if (member2.connections?.some(c => c.targetId === id1 && c.label.includes('همسر'))) return "همسر";
+
+    // Find path to root
     const path1 = getPathToRoot(treeData, id1);
     const path2 = getPathToRoot(treeData, id2);
 
-    if (!path1 || !path2) {
-        const member1 = findNode(treeData, id1);
-        if (member1?.connections?.some(c => c.targetId === id2 && c.label.includes('همسر'))) return 'همسر';
-        return "ارتباط مستقیم خونی یافت نشد (احتمالاً سببی)";
+    if (!path1 || !path2 || path1[0].id !== path2[0].id) {
+        return "ارتباط خونی مستقیم یافت نشد (شاید سببی یا در شجره‌نامه‌های جدا)";
     }
+
+    // Find LCA (Lowest Common Ancestor)
+    let lcaIndex = 0;
+    while (
+        lcaIndex < path1.length && 
+        lcaIndex < path2.length && 
+        path1[lcaIndex].id === path2[lcaIndex].id
+    ) {
+        lcaIndex++;
+    }
+    lcaIndex--; 
     
-    // Simple Logic for demo
-    return "محاسبه شده در نسخه کامل";
+    const d1 = path1.length - 1 - lcaIndex; // Distance from LCA to m1
+    const d2 = path2.length - 1 - lcaIndex; // Distance from LCA to m2
+    const gender2 = member2.gender;
+
+    // Direct Line
+    if (d1 === 0) {
+        // m1 is ancestor of m2
+        if (d2 === 1) return member1.gender === 'male' ? "پدر" : "مادر"; // Relative to m2
+        // But we want relationship OF m2 TO m1.
+        // "Calculate relation: Who is m2 to m1?"
+        // If d1=0, m1 is the LCA. m2 is descendant.
+        if (d2 === 1) return gender2 === 'male' ? "فرزند (پسر)" : "فرزند (دختر)";
+        if (d2 === 2) return gender2 === 'male' ? "نوه (پسر)" : "نوه (دختر)";
+        return `نواده (${d2} نسل بعد)`;
+    }
+    if (d2 === 0) {
+        // m2 is ancestor of m1
+        if (d1 === 1) return gender2 === 'male' ? "پدر" : "مادر";
+        if (d1 === 2) return gender2 === 'male' ? "پدربزرگ" : "مادربزرگ";
+        if (d1 === 3) return gender2 === 'male' ? "پدرجد" : "مادرجد";
+        return `جد (${d1} نسل قبل)`;
+    }
+
+    // Siblings
+    if (d1 === 1 && d2 === 1) return gender2 === 'male' ? "برادر" : "خواهر";
+
+    // Uncle/Aunt vs Nephew/Niece
+    if (d1 === 1 && d2 === 2) {
+        // m1 is sibling of m2's parent. m2 is nephew/niece.
+        const m2Parent = path2[path2.length - 2];
+        const relationType = m2Parent.gender === 'male' ? "برادر" : "خواهر";
+        return gender2 === 'male' ? `پسر ${relationType}` : `دختر ${relationType}`;
+    }
+    if (d1 === 2 && d2 === 1) {
+        // m2 is sibling of m1's parent. m2 is uncle/aunt.
+        const m1Parent = path1[path1.length - 2];
+        if (m1Parent.gender === 'male') return gender2 === 'male' ? "عمو" : "عمه";
+        return gender2 === 'male' ? "دایی" : "خاله";
+    }
+
+    // Cousins
+    if (d1 === 2 && d2 === 2) {
+        const m1Parent = path1[path1.length - 2];
+        const m2Parent = path2[path2.length - 2];
+        
+        if (m1Parent.gender === 'male') { // Father's side
+            if (m2Parent.gender === 'male') return gender2 === 'male' ? "پسرعمو" : "دخترعمو";
+            else return gender2 === 'male' ? "پسرعمه" : "دخترعمه";
+        } else { // Mother's side
+            if (m2Parent.gender === 'male') return gender2 === 'male' ? "پسردایی" : "دختردایی";
+            else return gender2 === 'male' ? "پسرخاله" : "دخترخاله";
+        }
+    }
+
+    return `ارتباط فامیلی دور (فاصله ${d1} - ${d2})`;
   };
   
   const handleCalculateByCode = () => {
