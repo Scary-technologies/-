@@ -3,7 +3,7 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { FamilyMember, AppTheme } from './types';
 import FamilyTree from './components/FamilyTree';
 import MemberPanel from './components/MemberPanel';
-import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, Cloud, CheckCircle2, RefreshCcw, Plus, Moon } from 'lucide-react';
+import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, Cloud, CheckCircle2, RefreshCcw, Plus, Moon, ListFilter, Clock } from 'lucide-react';
 
 // Historical Context Data
 const historicalEvents = [
@@ -202,7 +202,8 @@ const flattenTree = (node: FamilyMember): FamilyMember[] => {
 
 // --- MAIN COMPONENT ---
 
-const STORAGE_KEY = 'nasab_family_tree_autosave';
+// This key acts as the "filename" in the browser's local database
+const STORAGE_KEY = 'nasab_family_tree_db_json';
 
 const App: React.FC = () => {
   const [treeData, setTreeData] = useState<FamilyMember>(defaultFamilyData);
@@ -214,6 +215,22 @@ const App: React.FC = () => {
   // UI State
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  
+  // Filter State
+  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
+  const [filterCriteria, setFilterCriteria] = useState({
+      startYear: '',
+      endYear: '',
+      occupation: '',
+      tag: ''
+  });
+
+  // Time-Lapse State
+  const [minYear, setMinYear] = useState(1300);
+  const [maxYear, setMaxYear] = useState(1405);
+  const [currentYear, setCurrentYear] = useState(1405);
+  const [isTimeSliderVisible, setIsTimeSliderVisible] = useState(false);
+
   const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>('horizontal');
   const [theme, setTheme] = useState<AppTheme>('modern');
   const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
@@ -227,7 +244,7 @@ const App: React.FC = () => {
       document.body.className = `theme-${theme}`;
   }, [theme]);
 
-  // Auto Load
+  // Auto Load (Simulating loading the JSON DB file on startup)
   useEffect(() => {
       const savedData = localStorage.getItem(STORAGE_KEY);
       if (savedData) {
@@ -235,31 +252,104 @@ const App: React.FC = () => {
               const parsed = JSON.parse(savedData);
               if (parsed && (parsed.id || parsed.children)) {
                   setTreeData(parsed);
-                  console.log('Auto-loaded from local storage');
+                  console.log('Database loaded successfully');
               }
           } catch (e) {
-              console.error('Failed to auto-load', e);
+              console.error('Failed to load database', e);
           }
       }
   }, []);
 
-  // Auto Save
+  // Real-time Auto Save (Simulating writing to JSON DB file)
   useEffect(() => {
       setSaveStatus('saving');
+      // Reduced delay to 500ms for "Real-time" (Bi-derang) feel
       const timer = setTimeout(() => {
           try {
               localStorage.setItem(STORAGE_KEY, JSON.stringify(treeData));
               setSaveStatus('saved');
           } catch (e) {
               setSaveStatus('unsaved');
-              console.error('Auto-save failed', e);
+              console.error('Database write failed', e);
           }
-      }, 1000);
+      }, 500);
 
       return () => clearTimeout(timer);
   }, [treeData]);
 
   const allMembers = useMemo(() => flattenTree(treeData), [treeData]);
+
+  // Update Year Range for Time-Lapse
+  useEffect(() => {
+      let min = 1400;
+      let max = 1300;
+      allMembers.forEach(m => {
+          if (m.birthDate) {
+              const y = parseInt(m.birthDate.split('/')[0]);
+              if (!isNaN(y)) {
+                  if (y < min) min = y;
+                  if (y > max) max = y;
+              }
+          }
+      });
+      // Add buffer
+      if (min === 1400 && max === 1300) { // No valid dates found
+           min = 1300; max = 1405;
+      } else {
+           min -= 10; max += 5;
+      }
+      
+      setMinYear(min);
+      setMaxYear(max);
+      if (!isTimeSliderVisible) setCurrentYear(max); // Reset to max if slider not active
+  }, [allMembers, isTimeSliderVisible]);
+
+
+  // Search Logic with Filters
+  const filteredMembers = useMemo(() => {
+      if (!searchQuery && !filterCriteria.startYear && !filterCriteria.endYear && !filterCriteria.occupation && !filterCriteria.tag) {
+          return [];
+      }
+
+      return allMembers.filter(m => {
+          if (m.relation === 'SystemRoot') return false;
+
+          // 1. Text Search (Name or Code)
+          if (searchQuery) {
+              const query = searchQuery.toLowerCase();
+              const nameMatch = m.name.toLowerCase().includes(query);
+              const codeMatch = m.code && m.code.toLowerCase().includes(query);
+              if (!nameMatch && !codeMatch) return false;
+          }
+
+          // 2. Occupation Filter
+          if (filterCriteria.occupation) {
+              if (!m.occupation || !m.occupation.includes(filterCriteria.occupation)) return false;
+          }
+
+          // 3. Tag Filter
+          if (filterCriteria.tag) {
+              if (!m.tags || !m.tags.some(t => t.label.includes(filterCriteria.tag))) return false;
+          }
+
+          // 4. Date Range Filter
+          if (filterCriteria.startYear || filterCriteria.endYear) {
+              const birthYear = m.birthDate ? parseInt(m.birthDate.split('/')[0]) : null;
+              
+              if (!birthYear) return false; // Exclude if no birth year defined
+
+              if (filterCriteria.startYear) {
+                  if (birthYear < parseInt(filterCriteria.startYear)) return false;
+              }
+              if (filterCriteria.endYear) {
+                  if (birthYear > parseInt(filterCriteria.endYear)) return false;
+              }
+          }
+
+          return true;
+      });
+  }, [allMembers, searchQuery, filterCriteria]);
+
 
   // --- HANDLERS ---
 
@@ -326,7 +416,6 @@ const App: React.FC = () => {
         if (detailsMember?.id === id) setDetailsMember(null);
         if (selectedNodeId === id) setSelectedNodeId(null);
     } else {
-        // If newTree is null, it means the system root was somehow deleted (unlikely due to id check)
         alert("خطا در حذف عضو.");
     }
   };
@@ -508,15 +597,6 @@ const App: React.FC = () => {
       event.target.value = '';
   };
 
-  const handleReset = () => {
-      if(window.confirm("آیا مطمئن هستید؟ تمام اطلاعات پاک شده و به حالت اولیه باز می‌گردد.")) {
-          setTreeData(defaultFamilyData);
-          localStorage.removeItem(STORAGE_KEY);
-          setDetailsMember(null);
-          setSelectedNodeId(null);
-      }
-  }
-
   const glassClass = theme === 'dark' ? 'glass-panel-dark' : 'glass-panel';
 
   return (
@@ -534,9 +614,9 @@ const App: React.FC = () => {
               <div className="flex flex-col">
                   <h1 className="text-lg font-bold tracking-tight leading-none">نسب‌نما</h1>
                   <div className="flex items-center gap-1 text-[10px] tracking-wider opacity-70">
-                      {saveStatus === 'saving' && <><RefreshCcw size={10} className="animate-spin"/> در حال ذخیره...</>}
-                      {saveStatus === 'saved' && <><CheckCircle2 size={10} className="text-teal-500"/> ذخیره شد</>}
-                      {saveStatus === 'unsaved' && <span className="text-red-500">ذخیره نشده</span>}
+                      {saveStatus === 'saving' && <><RefreshCcw size={10} className="animate-spin text-amber-500"/> ذخیره بی‌درنگ...</>}
+                      {saveStatus === 'saved' && <><CheckCircle2 size={10} className="text-teal-500"/> بانک اطلاعاتی بروز</>}
+                      {saveStatus === 'unsaved' && <span className="text-red-500">خطا در ذخیره</span>}
                   </div>
               </div>
            </div>
@@ -545,35 +625,101 @@ const App: React.FC = () => {
                <Plus size={14} /> ایجاد خاندان جدید
            </button>
            
-           {/* Search */}
+           {/* Search & Filters */}
            <div className="relative hidden lg:block group">
-              <div className={`flex items-center rounded-xl px-4 py-2 border w-64 focus-within:w-80 transition-all ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white/40 border-white/50 hover:bg-white/60'}`}>
-                 <Search size={18} className="text-slate-400 ml-2"/>
-                 <input 
-                   type="text" 
-                   placeholder="جستجو..." 
-                   className="bg-transparent outline-none text-sm w-full placeholder:text-slate-400"
-                   value={searchQuery}
-                   onChange={(e) => { setSearchQuery(e.target.value); setIsSearchOpen(true); }}
-                   onFocus={() => setIsSearchOpen(true)}
-                 />
+              <div className="flex items-center gap-2">
+                  <div className={`flex items-center rounded-xl px-4 py-2 border w-64 focus-within:w-80 transition-all ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white/40 border-white/50 hover:bg-white/60'}`}>
+                     <Search size={18} className="text-slate-400 ml-2"/>
+                     <input 
+                       type="text" 
+                       placeholder="جستجو..." 
+                       className="bg-transparent outline-none text-sm w-full placeholder:text-slate-400"
+                       value={searchQuery}
+                       onChange={(e) => { setSearchQuery(e.target.value); setIsSearchOpen(true); }}
+                       onFocus={() => setIsSearchOpen(true)}
+                     />
+                  </div>
+                  
+                  {/* Filter Toggle Button */}
+                  <button 
+                    onClick={() => setIsFilterPanelOpen(!isFilterPanelOpen)}
+                    className={`p-2 rounded-xl border transition-all ${isFilterPanelOpen || (filterCriteria.startYear || filterCriteria.endYear || filterCriteria.occupation || filterCriteria.tag) ? 'bg-teal-500 text-white border-teal-500' : (theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-slate-400 hover:text-slate-200' : 'bg-white/40 border-white/50 text-slate-500 hover:text-slate-800')}`}
+                    title="فیلترهای پیشرفته"
+                  >
+                      <ListFilter size={20} />
+                  </button>
               </div>
-              {isSearchOpen && searchQuery && (
-                  <div className={`absolute top-full left-0 w-full mt-2 rounded-xl shadow-xl overflow-hidden z-50 ${theme === 'dark' ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-slate-100'}`}>
-                      {allMembers.filter(m => m.name.includes(searchQuery) && m.relation !== 'SystemRoot').slice(0, 5).map(result => (
-                          <button 
-                            key={result.id} 
-                            className={`w-full text-right px-4 py-2 text-sm flex justify-between items-center hover:bg-teal-50/50 ${theme === 'dark' ? 'hover:bg-white/5 text-slate-300' : 'text-slate-700'}`}
-                            onClick={() => {
-                                setSelectedNodeId(result.id);
-                                setIsSearchOpen(false);
-                                setSearchQuery('');
-                            }}
-                          >
-                              <span>{result.name}</span>
-                              <span className="text-xs opacity-50">{result.relation}</span>
-                          </button>
-                      ))}
+
+              {/* Advanced Filter Panel */}
+              {isFilterPanelOpen && (
+                  <div className={`absolute top-full right-0 mt-2 w-72 rounded-xl shadow-xl z-50 p-4 space-y-3 ${theme === 'dark' ? 'glass-panel-dark border-slate-700' : 'glass-panel border-white/50'}`}>
+                      <h4 className="text-xs font-bold opacity-70 mb-2">فیلترهای پیشرفته</h4>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                          <input 
+                            placeholder="از سال (مثلاً 1350)" 
+                            className={`w-full p-2 text-xs rounded-lg border outline-none ${theme === 'dark' ? 'bg-slate-900/50 border-slate-600' : 'bg-white/50 border-slate-200'}`}
+                            value={filterCriteria.startYear}
+                            onChange={(e) => setFilterCriteria({...filterCriteria, startYear: e.target.value})}
+                          />
+                          <input 
+                            placeholder="تا سال" 
+                            className={`w-full p-2 text-xs rounded-lg border outline-none ${theme === 'dark' ? 'bg-slate-900/50 border-slate-600' : 'bg-white/50 border-slate-200'}`}
+                            value={filterCriteria.endYear}
+                            onChange={(e) => setFilterCriteria({...filterCriteria, endYear: e.target.value})}
+                          />
+                      </div>
+
+                      <input 
+                        placeholder="شغل / حرفه" 
+                        className={`w-full p-2 text-xs rounded-lg border outline-none ${theme === 'dark' ? 'bg-slate-900/50 border-slate-600' : 'bg-white/50 border-slate-200'}`}
+                        value={filterCriteria.occupation}
+                        onChange={(e) => setFilterCriteria({...filterCriteria, occupation: e.target.value})}
+                      />
+
+                      <input 
+                        placeholder="برچسب (Tag)" 
+                        className={`w-full p-2 text-xs rounded-lg border outline-none ${theme === 'dark' ? 'bg-slate-900/50 border-slate-600' : 'bg-white/50 border-slate-200'}`}
+                        value={filterCriteria.tag}
+                        onChange={(e) => setFilterCriteria({...filterCriteria, tag: e.target.value})}
+                      />
+                      
+                      <button 
+                        onClick={() => setFilterCriteria({startYear: '', endYear: '', occupation: '', tag: ''})}
+                        className="w-full text-xs text-red-400 hover:text-red-500 mt-2 text-center"
+                      >
+                          پاک کردن فیلترها
+                      </button>
+                  </div>
+              )}
+
+              {/* Search Results Dropdown */}
+              {(isSearchOpen && (searchQuery || filteredMembers.length > 0)) && (
+                  <div className={`absolute top-full left-0 w-80 mt-2 rounded-xl shadow-xl overflow-hidden z-40 max-h-64 overflow-y-auto custom-scrollbar ${theme === 'dark' ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-slate-100'}`}>
+                      {filteredMembers.length > 0 ? (
+                          filteredMembers.slice(0, 10).map(result => (
+                              <button 
+                                key={result.id} 
+                                className={`w-full text-right px-4 py-2.5 text-sm flex justify-between items-center border-b border-dashed border-slate-100 last:border-0 ${theme === 'dark' ? 'hover:bg-white/5 text-slate-300 border-slate-700' : 'text-slate-700 hover:bg-teal-50'}`}
+                                onClick={() => {
+                                    setSelectedNodeId(result.id);
+                                    setIsSearchOpen(false);
+                                    setSearchQuery('');
+                                }}
+                              >
+                                  <div className="flex flex-col">
+                                      <span className="font-bold">{result.name}</span>
+                                      <div className="flex gap-2 text-[10px] opacity-60">
+                                          <span>{result.birthDate || '؟'}</span>
+                                          {result.occupation && <span>• {result.occupation}</span>}
+                                      </div>
+                                  </div>
+                                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-500 opacity-70">{result.relation}</span>
+                              </button>
+                          ))
+                      ) : (
+                          <div className="p-4 text-center text-sm opacity-50">موردی یافت نشد.</div>
+                      )}
                   </div>
               )}
            </div>
@@ -581,6 +727,15 @@ const App: React.FC = () => {
         
         <div className="flex gap-3 items-center">
            
+           {/* Time-Lapse Toggle */}
+           <button 
+             onClick={() => setIsTimeSliderVisible(!isTimeSliderVisible)}
+             className={`p-2 rounded-lg border transition-all ${isTimeSliderVisible ? 'bg-amber-100 border-amber-300 text-amber-700' : (theme === 'dark' ? 'bg-slate-800/50 border-slate-700 hover:text-white' : 'bg-white/40 border-white/50 hover:bg-white/60')}`}
+             title="مرور زمان"
+           >
+               <Clock size={18} />
+           </button>
+
            {/* Theme Toggles */}
            <div className={`flex p-1 rounded-lg border ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white/40 border-white/50'}`}>
                {['modern', 'dark'].map((t) => (
@@ -594,14 +749,9 @@ const App: React.FC = () => {
 
            {/* File Controls */}
            <div className={`flex p-1 rounded-lg border hidden sm:flex ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white/40 border-white/50'}`}>
-               <button onClick={handleExportJSON} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100 text-blue-600" title="دانلود فایل"><Download size={18} /></button>
-               <button onClick={handleImportClick} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100 text-teal-600" title="آپلود فایل"><Upload size={18} /></button>
+               <button onClick={handleExportJSON} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100 text-blue-600" title="دانلود فایل JSON"><Download size={18} /></button>
+               <button onClick={handleImportClick} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100 text-teal-600" title="بارگذاری فایل JSON"><Upload size={18} /></button>
            </div>
-           
-           <button onClick={handleReset} className="text-xs text-red-500 hover:bg-red-50 px-2 py-1 rounded border border-transparent hover:border-red-200 transition-all">
-               شروع تازه
-           </button>
-
         </div>
       </header>
       )}
@@ -619,12 +769,35 @@ const App: React.FC = () => {
           highlightedIds={highlightedIds}
           onAddChild={handleAddChild}
           onAddSibling={handleAddSibling}
+          currentYear={isTimeSliderVisible ? currentYear : undefined}
         />
       </div>
 
+      {/* Time-Lapse Slider Panel */}
+      {isTimeSliderVisible && (
+          <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-lg z-30 p-4 rounded-2xl shadow-2xl backdrop-blur-lg border animate-enter ${theme === 'dark' ? 'bg-slate-900/80 border-slate-700 text-slate-200' : 'bg-white/80 border-white/50 text-slate-800'}`}>
+              <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-bold opacity-60">اسلایدر مرور زمان</span>
+                  <span className="text-lg font-mono font-bold text-amber-500">{currentYear}</span>
+              </div>
+              <input 
+                type="range" 
+                min={minYear} 
+                max={maxYear} 
+                value={currentYear}
+                onChange={(e) => setCurrentYear(parseInt(e.target.value))}
+                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
+              />
+              <div className="flex justify-between text-[10px] opacity-40 mt-1 font-mono">
+                  <span>{minYear}</span>
+                  <span>{maxYear}</span>
+              </div>
+          </div>
+      )}
+
       {/* Modal / Popup for Member Details */}
       {detailsMember && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-enter" onClick={() => setDetailsMember(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-enter" onClick={() => setDetailsMember(null)}>
             <div 
               className={`w-full max-w-4xl h-[85vh] shadow-2xl rounded-2xl overflow-hidden transform transition-all relative ${theme === 'dark' ? 'bg-slate-900' : 'bg-white'}`}
               onClick={(e) => e.stopPropagation()}

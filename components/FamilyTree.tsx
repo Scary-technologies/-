@@ -1,8 +1,12 @@
 
-import React, { useEffect, useRef, useState, useLayoutEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { FamilyMember, AppTheme, Tag } from '../types';
-import { Maximize, ZoomIn, ZoomOut, Image as ImageIcon, GitMerge, Plus, GitBranch, Route, User, ArrowDown, ArrowRight } from 'lucide-react';
+import { FamilyMember, AppTheme } from '../types';
+import { Maximize, ZoomIn, ZoomOut, ArrowDown, ArrowRight, Heart, User, Edit, Plus, Trash2, GitBranch, GitMerge } from 'lucide-react';
+
+// SVG Paths for Gender Icons (Material Design Style)
+const MALE_ICON = "M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z";
+const FEMALE_ICON = "M12,4A4,4 0 0,1 16,8C16,9.95 14.6,11.58 12.75,11.93L12.75,12.09C12.75,12.09 16,13.67 16,18V20H8V18C8,13.9 11.25,12.09 11.25,12.09L11.25,11.93C9.4,11.58 8,9.95 8,8A4,4 0 0,1 12,4Z";
 
 interface FamilyTreeProps {
   data: FamilyMember;
@@ -15,6 +19,9 @@ interface FamilyTreeProps {
   highlightedIds: Set<string>;
   onAddChild?: (parentId: string) => void;
   onAddSibling?: (memberId: string) => void;
+  onAddSpouse?: (memberId: string) => void;
+  onDeleteMember?: (id: string) => void;
+  currentYear?: number;
 }
 
 const FamilyTree: React.FC<FamilyTreeProps> = ({ 
@@ -27,7 +34,10 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   theme,
   highlightedIds,
   onAddChild,
-  onAddSibling
+  onAddSibling,
+  onAddSpouse,
+  onDeleteMember,
+  currentYear
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -36,25 +46,40 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [linkStyle, setLinkStyle] = useState<'curved' | 'straight'>('curved');
   const [preventOverlap, setPreventOverlap] = useState(false);
-  const [heatmapMode, setHeatmapMode] = useState(false);
   const [selectedNodePos, setSelectedNodePos] = useState<{x: number, y: number} | null>(null);
+  const [contextMenu, setContextMenu] = useState<{x: number, y: number, memberId: string} | null>(null);
   
-  // Store node map in ref to access it without redrawing graph
   const nodeMapRef = useRef<Map<string, d3.HierarchyPointNode<FamilyMember>>>(new Map());
 
-  // Theme configuration
+  // Helper to extract year from date string
+  const getBirthYear = (dateStr?: string): number => {
+      if (!dateStr) return -1;
+      const part = dateStr.split('/')[0];
+      const year = parseInt(part);
+      return isNaN(year) ? -1 : year;
+  };
+
+  // Helper to check visibility based on time-lapse
+  const isVisibleInTime = (d: FamilyMember) => {
+      if (!currentYear) return true;
+      const year = getBirthYear(d.birthDate);
+      if (year === -1) return true; 
+      return year <= currentYear;
+  };
+
   const getThemeColors = (theme: AppTheme) => {
     switch (theme) {
       case 'dark':
         return {
           link: '#475569',
           linkExtra: '#f59e0b',
-          maleGrad: ['#1e40af', '#3b82f6'],
-          femaleGrad: ['#831843', '#db2777'],
+          linkSpouse: '#ec4899',
+          nodeFill: '#1e293b', 
+          maleIcon: '#60a5fa',
+          femaleIcon: '#f472b6',
           text: '#f1f5f9',
           textSecondary: '#94a3b8',
-          nodeStroke: '#fff',
-          bgLabel: '#0f172a',
+          nodeStroke: '#334155',
           selectedRing: '#2dd4bf'
         };
       case 'modern':
@@ -62,12 +87,13 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         return {
           link: '#94a3b8',
           linkExtra: '#f59e0b',
-          maleGrad: ['#60a5fa', '#2563eb'],
-          femaleGrad: ['#f472b6', '#db2777'],
+          linkSpouse: '#db2777',
+          nodeFill: '#f8fafc', 
+          maleIcon: '#3b82f6',
+          femaleIcon: '#db2777',
           text: '#1e293b',
           textSecondary: '#64748b',
-          nodeStroke: '#fff',
-          bgLabel: 'rgba(255,255,255,0.9)',
+          nodeStroke: '#e2e8f0',
           selectedRing: '#0f766e'
         };
     }
@@ -82,14 +108,12 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         });
       }
     };
-
     window.addEventListener('resize', updateDimensions);
     updateDimensions();
-
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
-  // Effect to calculate selectedNodePos independently from graph drawing
+  // Sync floating menu position
   useEffect(() => {
       if (selectedId && nodeMapRef.current.has(selectedId)) {
         const sNode = nodeMapRef.current.get(selectedId);
@@ -97,127 +121,76 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             const t = zoomTransform;
             const x = orientation === 'horizontal' ? sNode.y : sNode.x;
             const y = orientation === 'horizontal' ? sNode.x : sNode.y;
-            setSelectedNodePos({
-                x: t.x + x * t.k + 120, // margin.left
-                y: t.y + y * t.k + 80   // margin.top
-            });
+            // Apply zoom transform
+            const finalX = t.x + x * t.k + 120; // + margin.left
+            const finalY = t.y + y * t.k + 80;  // + margin.top
+            setSelectedNodePos({ x: finalX, y: finalY });
         }
       } else {
         setSelectedNodePos(null);
+        setContextMenu(null);
       }
   }, [selectedId, zoomTransform, orientation, dimensions]);
 
-  // Main Graph Drawing Effect - DOES NOT depend on zoomTransform to prevent loop
+  // Main Graph Drawing
   useEffect(() => {
     if (!data || !svgRef.current) return;
 
     const colors = getThemeColors(theme);
     const hasHighlight = highlightedIds.size > 0;
 
-    // Clear previous SVG
     d3.select(svgRef.current).selectAll("*").remove();
 
     const margin = { top: 80, right: 120, bottom: 80, left: 120 };
-    const width = dimensions.width - margin.left - margin.right;
     
     const svg = d3.select(svgRef.current)
       .attr("width", dimensions.width)
-      .attr("height", dimensions.height);
-
-    // Define Gradients
-    const defs = svg.append("defs");
-    
-    // Male Gradient
-    const maleGrad = defs.append("linearGradient")
-      .attr("id", "grad-male")
-      .attr("x1", "0%")
-      .attr("y1", "0%")
-      .attr("x2", "100%")
-      .attr("y2", "100%");
-    maleGrad.append("stop").attr("offset", "0%").style("stop-color", colors.maleGrad[0]);
-    maleGrad.append("stop").attr("offset", "100%").style("stop-color", colors.maleGrad[1]);
-
-    // Female Gradient
-    const femaleGrad = defs.append("linearGradient")
-      .attr("id", "grad-female")
-      .attr("x1", "0%")
-      .attr("y1", "0%")
-      .attr("x2", "100%")
-      .attr("y2", "100%");
-    femaleGrad.append("stop").attr("offset", "0%").style("stop-color", colors.femaleGrad[0]);
-    femaleGrad.append("stop").attr("offset", "100%").style("stop-color", colors.femaleGrad[1]);
+      .attr("height", dimensions.height)
+      .on("click", () => {
+          setContextMenu(null);
+      });
 
     const g = svg.append("g")
-      .attr("class", "tree-group")
-      .attr("transform", `translate(${margin.left},${margin.top})`);
-
-    // Apply current zoom immediately to the group
-    g.attr("transform", zoomTransform.toString());
+      .attr("transform", zoomTransform.toString());
 
     // Define Zoom
     const zoom = d3.zoom<SVGSVGElement, unknown>()
         .scaleExtent([0.1, 3])
         .on("zoom", (event) => {
-          // Prevent infinite loop by checking if transform actually changed
           if (event.transform.k === zoomTransform.k && 
               event.transform.x === zoomTransform.x && 
               event.transform.y === zoomTransform.y) return;
-
           g.attr("transform", event.transform);
           setZoomTransform(event.transform);
+          setContextMenu(null); // Close context menu on zoom
         });
 
     svg.call(zoom);
-    // Sync zoom state
-    if (svg.node()) {
-        // @ts-ignore
-        d3.zoomTransform(svg.node()).k = zoomTransform.k;
-        // @ts-ignore
-        d3.zoomTransform(svg.node()).x = zoomTransform.x;
-        // @ts-ignore
-        d3.zoomTransform(svg.node()).y = zoomTransform.y;
-    }
-    
     zoomRef.current = zoom;
 
-    // Declare the tree layout
+    // Tree Layout
     let treemap;
     if (orientation === 'horizontal') {
         treemap = d3.tree<FamilyMember>()
-            .nodeSize([90, 240]) // Increased vertical gap for separation
-            .separation((a, b) => {
-                // Extra separation between different sub-trees (clans)
-                if (a.parent === b.parent) return 1.2;
-                return 2.5; 
-            });
+            .nodeSize([90, 240]) 
+            .separation((a, b) => a.parent === b.parent ? 1.2 : 2.5);
     } else {
         treemap = d3.tree<FamilyMember>()
             .nodeSize([160, 160])
-            .separation((a, b) => {
-                if (a.parent === b.parent) return 1.2;
-                return 2.5;
-            });
+            .separation((a, b) => a.parent === b.parent ? 1.2 : 2.5);
     }
 
     const root = d3.hierarchy(data, (d) => d.children);
     // @ts-ignore
     const nodes = treemap(root);
 
-    // Calculate Max Depth for Heatmap
-    let maxDepth = 0;
-    nodes.descendants().forEach(d => { if(d.depth > maxDepth) maxDepth = d.depth; });
-    const heatmapColorScale = d3.scaleLinear<string>()
-        .domain([0, maxDepth])
-        .range(["#1e293b", "#cbd5e1"]);
-
-    // Create a lookup for nodes
     nodeMapRef.current.clear();
     nodes.descendants().forEach(d => {
       nodeMapRef.current.set(d.data.id, d);
     });
     
-    // Prepare extra connection links
-    const extraLinks: { source: d3.HierarchyPointNode<FamilyMember>; target: d3.HierarchyPointNode<FamilyMember>; label: string }[] = [];
+    // Extra Links (Connections)
+    const extraLinks: any[] = [];
     nodes.descendants().forEach(sourceNode => {
       if (sourceNode.data.connections) {
         sourceNode.data.connections.forEach(conn => {
@@ -233,8 +206,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       }
     });
 
-    // Custom Link Generator
-    const customLinkGenerator = (d: d3.HierarchyPointLink<FamilyMember> | { source: d3.HierarchyPointNode<FamilyMember>, target: d3.HierarchyPointNode<FamilyMember> }) => {
+    const customLinkGenerator = (d: any) => {
         const s = d.source;
         const t = d.target;
         
@@ -246,12 +218,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
              }
         }
 
-        // Curved Logic
         let offset = 0;
         if (preventOverlap) {
-            // Deterministic pseudo-random offset based on ID to separate overlapping lines
-            const idVal = t.data.id ? t.data.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) : 0;
-            // Create 3 lanes: -15, 0, +15
+            const idVal = t.data.id ? t.data.id.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) : 0;
             offset = ((idVal % 3) - 1) * 20; 
         }
 
@@ -270,456 +239,252 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         }
     };
 
-    // *** CRITICAL CHANGE: Filter out links originating from SystemRoot ***
-    const visibleLinks = nodes.links().filter(d => d.source.data.relation !== 'SystemRoot');
+    const gContent = g.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
-    // Draw Extra Links (Marriages/Connections)
-    g.selectAll(".extra-link")
+    // Draw Extra Links
+    gContent.selectAll(".extra-link")
       .data(extraLinks)
       .enter().append("path")
       .attr("class", "extra-link")
       .attr("d", customLinkGenerator)
       .attr("fill", "none")
-      .attr("stroke", colors.linkExtra) 
+      .attr("stroke", (d: any) => d.label === 'همسر' ? colors.linkSpouse : colors.linkExtra)
       .attr("stroke-width", "2px")
-      .attr("stroke-dasharray", "5,5")
+      .attr("stroke-dasharray", (d: any) => d.label === 'همسر' ? "0" : "5,5")
       .attr("opacity", (d: any) => {
+         if (!isVisibleInTime(d.source.data) || !isVisibleInTime(d.target.data)) return 0;
          if (!hasHighlight) return 0.6;
          const srcHi = highlightedIds.has(d.source.data.id);
          const tgtHi = highlightedIds.has(d.target.data.id);
          return (srcHi && tgtHi) ? 1 : 0.1;
       });
 
-    // Draw Standard Links (Filtered)
-    g.selectAll(".link")
+    // Draw Tree Links
+    const visibleLinks = nodes.links().filter(d => d.source.data.relation !== 'SystemRoot');
+    gContent.selectAll(".link")
       .data(visibleLinks)
       .enter().append("path")
       .attr("class", "link")
       .attr("d", customLinkGenerator)
       .attr("fill", "none")
-      .attr("stroke", (d: d3.HierarchyPointLink<FamilyMember>) => {
-          if (hasHighlight && highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id)) {
-             return colors.selectedRing;
-          }
+      .attr("stroke", (d: any) => {
+          if (hasHighlight && highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id)) return colors.selectedRing;
           return colors.link;
       })
-      .attr("stroke-width", (d: d3.HierarchyPointLink<FamilyMember>) => {
-         if (hasHighlight && highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id)) {
-             return "3px";
-         }
+      .attr("stroke-width", (d: any) => {
+         if (hasHighlight && highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id)) return "3px";
          return "1.5px";
       })
-      .style("opacity", (d: d3.HierarchyPointLink<FamilyMember>) => {
+      .style("opacity", (d: any) => {
+         if (!isVisibleInTime(d.source.data) || !isVisibleInTime(d.target.data)) return 0;
          if (!hasHighlight) return 1;
          if (highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id)) return 1;
          return 0.1;
-      })
-      .style("transition", "all 0.5s ease");
+      });
 
-    // Nodes Group
-    const node = g.selectAll(".node")
+    // Draw Nodes
+    const node = gContent.selectAll(".node")
       .data(nodes.descendants())
       .enter().append("g")
       .attr("class", "node")
-      .attr("transform", (d: d3.HierarchyPointNode<FamilyMember>) => {
-          return orientation === 'horizontal' 
-            ? "translate(" + d.y + "," + d.x + ")"
-            : "translate(" + d.x + "," + d.y + ")";
-      })
+      .attr("transform", (d: any) => orientation === 'horizontal' ? `translate(${d.y},${d.x})` : `translate(${d.x},${d.y})`)
       .style("cursor", "pointer")
       .on("click", (event, d: d3.HierarchyPointNode<FamilyMember>) => {
         if(d.data.relation === 'SystemRoot') return;
-        onNodeClick(d.data);
         event.stopPropagation();
+        onNodeClick(d.data);
       })
       .on("dblclick", (event, d: d3.HierarchyPointNode<FamilyMember>) => {
           if(d.data.relation === 'SystemRoot') return;
-          onOpenDetails(d.data);
           event.stopPropagation();
+          onOpenDetails(d.data);
       })
       .on("contextmenu", (event, d: d3.HierarchyPointNode<FamilyMember>) => {
           event.preventDefault();
           if(d.data.relation === 'SystemRoot') return;
-          onNodeClick(d.data); 
+          onNodeClick(d.data);
+          setContextMenu({ x: event.clientX, y: event.clientY, memberId: d.data.id });
       })
       .style("opacity", (d: d3.HierarchyPointNode<FamilyMember>) => {
-         // *** CRITICAL: Completely hide SystemRoot ***
+         if (!isVisibleInTime(d.data)) return 0.05;
          if (d.data.relation === 'SystemRoot') return 0;
          if (!hasHighlight) return 1;
          return highlightedIds.has(d.data.id) ? 1 : 0.2; 
-      })
-      .style("transition", "opacity 0.4s ease")
-      .style("pointer-events", (d: d3.HierarchyPointNode<FamilyMember>) => d.data.relation === 'SystemRoot' ? 'none' : 'all')
-      // --- Hover Effects ---
-      .on("mouseenter", function(event, d: d3.HierarchyPointNode<FamilyMember>) {
-          if (d.data.relation === 'SystemRoot') return;
-          
-          const group = d3.select(this);
-          
-          // Scale background circle
-          group.select(".node-bg")
-            .transition().duration(300).ease(d3.easeBackOut)
-            .attr("r", 32)
-            .style("filter", "drop-shadow(0 8px 16px rgba(0,0,0,0.2))")
-            .attr("stroke-width", "3px");
-
-          // Scale image
-          group.select(".node-img")
-            .transition().duration(300).ease(d3.easeBackOut)
-            .attr("x", -32).attr("y", -32)
-            .attr("width", 64).attr("height", 64);
-            
-          // Lift label group
-          group.select(".node-label-rect")
-            .transition().duration(300)
-            .attr("y", orientation === 'horizontal' ? 38 : 38);
-            
-          group.select(".node-label-text")
-             .transition().duration(300)
-             .attr("dy", orientation === 'horizontal' ? "55" : "55");
-
-          group.select(".node-label-sub")
-             .transition().duration(300)
-             .attr("dy", orientation === 'horizontal' ? "70" : "70");
-      })
-      .on("mouseleave", function(event, d: d3.HierarchyPointNode<FamilyMember>) {
-          if (d.data.relation === 'SystemRoot') return;
-          
-          const group = d3.select(this);
-          
-          group.select(".node-bg")
-            .transition().duration(300).ease(d3.easeCubicOut)
-            .attr("r", 26)
-            .style("filter", null)
-            .attr("stroke-width", "2px");
-
-          group.select(".node-img")
-            .transition().duration(300).ease(d3.easeCubicOut)
-            .attr("x", -26).attr("y", -26)
-            .attr("width", 52).attr("height", 52);
-            
-          group.select(".node-label-rect")
-            .transition().duration(300)
-            .attr("y", orientation === 'horizontal' ? 32 : 32);
-
-          group.select(".node-label-text")
-             .transition().duration(300)
-             .attr("dy", orientation === 'horizontal' ? "49" : "49");
-
-          group.select(".node-label-sub")
-             .transition().duration(300)
-             .attr("dy", orientation === 'horizontal' ? "64" : "64");
       });
 
-    // 1. Selected State Ring
-    node.filter((d: d3.HierarchyPointNode<FamilyMember>) => d.data.id === selectedId)
-        .append("circle")
-        .attr("r", 34)
-        .attr("fill", "none")
-        .attr("stroke", colors.selectedRing)
-        .attr("stroke-width", 3)
-        .attr("stroke-dasharray", "4,4")
-        .attr("class", "animate-spin-slow");
-
-    // 2. Main Circle Background
+    // Node Circle Background (Neutral)
     node.append("circle")
-      .attr("class", "node-bg")
-      .attr("r", 26)
-      .style("fill", (d: d3.HierarchyPointNode<FamilyMember>) => {
-          if (heatmapMode) {
-             return heatmapColorScale(d.depth);
-          }
-          return d.data.gender === 'female' ? "url(#grad-female)" : (d.data.gender === 'male' ? "url(#grad-male)" : '#9ca3af');
+      .attr("r", 30)
+      .attr("fill", colors.nodeFill)
+      .attr("stroke", (d: any) => {
+          if (selectedId === d.data.id) return colors.selectedRing;
+          return colors.nodeStroke;
       })
-      .style("stroke", colors.nodeStroke)
-      .style("stroke-width", "2px")
-      .classed("drop-shadow-md", true);
+      .attr("stroke-width", (d: any) => selectedId === d.data.id ? "4px" : "2px")
+      .style("filter", "drop-shadow(0px 4px 6px rgba(0,0,0,0.1))")
+      .style("transition", "all 0.3s ease");
 
-    // 3. Clip Path
-    node.each(function(d: d3.HierarchyPointNode<FamilyMember>, i) {
+    // Clip Path for Images
+    const clipPathId = (d: any) => `clip-${d.data.id}`;
+    node.append("clipPath")
+      .attr("id", clipPathId)
+      .append("circle")
+      .attr("r", 28);
+
+    // Node Image or Gender Icon
+    node.each(function(d: d3.HierarchyPointNode<FamilyMember>) {
+        const el = d3.select(this);
         if (d.data.imageUrl) {
-             defs.append("clipPath")
-                .attr("id", "clip-circle-" + i)
-                .append("circle")
-                .attr("r", 26); // Match original radius
+            el.append("image")
+              .attr("xlink:href", d.data.imageUrl)
+              .attr("x", -28)
+              .attr("y", -28)
+              .attr("width", 56)
+              .attr("height", 56)
+              .attr("clip-path", `url(#${clipPathId(d)})`)
+              .attr("preserveAspectRatio", "xMidYMid slice");
+        } else {
+            // Draw Gender Icon if no image
+            el.append("path")
+              .attr("d", d.data.gender === 'male' ? MALE_ICON : FEMALE_ICON)
+              .attr("fill", d.data.gender === 'male' ? colors.maleIcon : colors.femaleIcon)
+              .attr("transform", "translate(-12, -12) scale(1)");
+        }
+
+        // Add Heart Icon if spouse exists
+        if (d.data.connections && d.data.connections.some(c => c.label === 'همسر')) {
+             el.append("circle")
+               .attr("r", 8)
+               .attr("cx", 22)
+               .attr("cy", 22)
+               .attr("fill", colors.nodeFill)
+               .attr("stroke", colors.linkSpouse)
+               .attr("stroke-width", 1);
+
+             el.append("g")
+               .attr("transform", "translate(16, 16) scale(0.5)")
+               .html(`<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="${colors.linkSpouse}"/>`);
         }
     });
 
-    // 4. Image
-    node.filter((d: d3.HierarchyPointNode<FamilyMember>) => !!d.data.imageUrl && !heatmapMode)
-        .append("image")
-        .attr("class", "node-img")
-        .attr("xlink:href", (d: d3.HierarchyPointNode<FamilyMember>) => d.data.imageUrl || '')
-        .attr("x", -26)
-        .attr("y", -26)
-        .attr("width", 52)
-        .attr("height", 52)
-        .attr("clip-path", (d, i) => `url(#clip-circle-${i})`)
-        .attr("preserveAspectRatio", "xMidYMid slice");
-
-    // 5. Label Background
-    node.append("rect")
-      .attr("class", "node-label-rect")
-      .attr("rx", 4)
-      .attr("ry", 4)
-      .attr("width", 110)
-      .attr("height", 26)
-      .attr("x", -55)
-      .attr("y", orientation === 'horizontal' ? 32 : 32)
-      .attr("fill", colors.bgLabel)
-      .style("opacity", 0.9);
-
-    // 6. Name
+    // Node Name
     node.append("text")
-      .attr("class", "node-label-text")
-      .attr("dy", orientation === 'horizontal' ? "49" : "49")
-      .style("text-anchor", "middle")
-      .text((d: d3.HierarchyPointNode<FamilyMember>) => d.data.name)
-      .style("font-family", 'Vazirmatn')
+      .attr("dy", 45)
+      .attr("text-anchor", "middle")
+      .text((d: any) => d.data.name)
+      .style("font-family", "Vazirmatn")
       .style("font-size", "12px")
       .style("font-weight", "bold")
-      .style("fill", colors.text);
+      .style("fill", colors.text)
+      .style("text-shadow", "0px 1px 2px rgba(255,255,255,0.8)");
 
-    // 7. Relation
+    // Node Date
     node.append("text")
-      .attr("class", "node-label-sub")
-      .attr("dy", orientation === 'horizontal' ? "64" : "64")
-      .style("text-anchor", "middle")
-      .text((d: d3.HierarchyPointNode<FamilyMember>) => d.data.relation || '')
-      .style("font-family", 'Vazirmatn')
+      .attr("dy", 58)
+      .attr("text-anchor", "middle")
+      .text((d: any) => d.data.birthDate ? d.data.birthDate.split('/')[0] : '')
+      .style("font-family", "monospace")
       .style("font-size", "10px")
       .style("fill", colors.textSecondary);
-      
-    // 8. Tags
-    node.each(function(d: d3.HierarchyPointNode<FamilyMember>) {
-        if (d.data.tags && d.data.tags.length > 0) {
-            d3.select(this).selectAll(".tag-dot")
-              .data(d.data.tags.slice(0, 3))
-              .enter().append("circle")
-              .attr("class", "tag-dot")
-              .attr("r", 3)
-              .attr("cx", (tag: Tag, i) => -15 + (i * 10))
-              .attr("cy", -32)
-              .attr("fill", (tag: Tag) => tag.color);
-        }
-    });
 
-    // Keyboard Navigation Listener
-    const handleKeyDown = (e: KeyboardEvent) => {
-        if (!selectedId) return;
-        const current = nodeMapRef.current.get(selectedId);
-        if (!current) return;
-        
-        let nextNode: d3.HierarchyPointNode<FamilyMember> | undefined;
+  }, [data, dimensions, orientation, theme, highlightedIds, linkStyle, preventOverlap, currentYear]); // Removed zoomTransform dependency to prevent loops
 
-        switch(e.key) {
-            case 'ArrowLeft': // Go to Parent
-                if(current.parent) nextNode = current.parent;
-                break;
-            case 'ArrowRight': // Go to First Child
-                if(current.children && current.children.length > 0) nextNode = current.children[0];
-                break;
-            case 'ArrowUp': // Go to Prev Sibling
-                if (current.parent && current.parent.children) {
-                    const idx = current.parent.children.indexOf(current);
-                    if (idx > 0) nextNode = current.parent.children[idx - 1];
-                }
-                break;
-            case 'ArrowDown': // Go to Next Sibling
-                 if (current.parent && current.parent.children) {
-                    const idx = current.parent.children.indexOf(current);
-                    if (idx < current.parent.children.length - 1) nextNode = current.parent.children[idx + 1];
-                }
-                break;
-            case 'Enter':
-                onOpenDetails(current.data);
-                break;
-        }
+  // Handlers
+  const handleZoomIn = () => {
+    if (svgRef.current && zoomRef.current) {
+      d3.select(svgRef.current).transition().call(zoomRef.current.scaleBy, 1.2);
+    }
+  };
 
-        if (nextNode && nextNode.data.relation !== 'SystemRoot') {
-            e.preventDefault();
-            onNodeClick(nextNode.data);
-            
-            // Auto Pan/Zoom to new node
-            const t = zoomTransform;
-            const targetX = orientation === 'horizontal' ? nextNode.y : nextNode.x;
-            const targetY = orientation === 'horizontal' ? nextNode.x : nextNode.y;
-            
-            if (svgRef.current && zoomRef.current) {
-                 d3.select(svgRef.current)
-                   .transition()
-                   .duration(300)
-                   .call(zoomRef.current.translateTo, targetX + margin.left, targetY + margin.top);
-            }
-        }
-    };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-
-  }, [data, dimensions, onNodeClick, onOpenDetails, selectedId, orientation, linkStyle, preventOverlap, theme, highlightedIds, heatmapMode]); 
-
-  // Handlers (handleZoom, handleFit, handleDownloadSVG)
-  const handleZoom = (factor: number) => {
-      if (svgRef.current && zoomRef.current) {
-          d3.select(svgRef.current)
-            .transition()
-            .duration(300)
-            .call(zoomRef.current.scaleBy, factor);
-      }
+  const handleZoomOut = () => {
+    if (svgRef.current && zoomRef.current) {
+      d3.select(svgRef.current).transition().call(zoomRef.current.scaleBy, 0.8);
+    }
   };
 
   const handleFit = () => {
-      // Logic for calculating bounding box of visible nodes
-      if (svgRef.current && zoomRef.current) {
-          const visibleNodes: any[] = [];
-          if(nodeMapRef.current.size > 0) {
-             nodeMapRef.current.forEach(node => {
-                 if(node.data.relation !== 'SystemRoot') visibleNodes.push(node);
-             });
-          }
+      if (!svgRef.current || !zoomRef.current) return;
+      const rootG = d3.select(svgRef.current).select('g');
+      // @ts-ignore
+      const bounds = rootG.node()?.getBBox();
+      if (!bounds) return;
 
-          if (visibleNodes.length === 0) return;
+      const parent = svgRef.current.parentElement;
+      if (!parent) return;
 
-          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-          
-          visibleNodes.forEach(node => {
-              const x = orientation === 'horizontal' ? node.y : node.x;
-              const y = orientation === 'horizontal' ? node.x : node.y;
-              if (x < minX) minX = x;
-              if (x > maxX) maxX = x;
-              if (y < minY) minY = y;
-              if (y > maxY) maxY = y;
-          });
+      const fullWidth = parent.clientWidth;
+      const fullHeight = parent.clientHeight;
+      const midX = bounds.x + bounds.width / 2;
+      const midY = bounds.y + bounds.height / 2;
 
-          // Add padding
-          minX -= 50; maxX += 50;
-          minY -= 50; maxY += 50;
+      if (bounds.width === 0 || bounds.height === 0) return;
 
-          const boundsWidth = maxX - minX;
-          const boundsHeight = maxY - minY;
-          
-          const midX = (minX + maxX) / 2;
-          const midY = (minY + maxY) / 2;
+      const scale = 0.85 / Math.max(bounds.width / fullWidth, bounds.height / fullHeight);
+      const translate = [fullWidth / 2 - scale * midX, fullHeight / 2 - scale * midY];
 
-          const scale = 0.9 / Math.max(boundsWidth / dimensions.width, boundsHeight / dimensions.height);
-          
-          // Margin offsets (120, 80) must be accounted for
-          const translate = [
-              dimensions.width / 2 - midX * scale + (120 * (1-scale)), // Approximate correction
-              dimensions.height / 2 - midY * scale + (80 * (1-scale))
-          ];
-
-          d3.select(svgRef.current)
-            .transition()
-            .duration(750)
-            .call(
-                zoomRef.current.transform, 
-                d3.zoomIdentity
-                    .translate(dimensions.width / 2, dimensions.height / 2)
-                    .scale(scale)
-                    .translate(-midX - 120, -midY - 80)
-            );
-      }
-  };
-
-  const handleDownloadSVG = () => {
-      if (!svgRef.current) return;
-      const svgData = new XMLSerializer().serializeToString(svgRef.current);
-      const blob = new Blob([svgData], {type: "image/svg+xml;charset=utf-8"});
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `nasab_tree_${theme}.svg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      d3.select(svgRef.current)
+        .transition()
+        .duration(750)
+        .call(
+            // @ts-ignore
+            zoomRef.current.transform, 
+            d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale)
+        );
   };
 
   const glassClass = theme === 'dark' ? 'glass-panel-dark' : 'glass-panel';
 
   return (
-    <div ref={wrapperRef} className="w-full h-full rounded-2xl overflow-hidden relative">
-      
-      {/* Quick Actions Floating Menu */}
-      {selectedId && selectedNodePos && onAddChild && onAddSibling && (
+    <div ref={wrapperRef} className="w-full h-full relative overflow-hidden bg-transparent" onContextMenu={(e) => e.preventDefault()}>
+      <svg ref={svgRef} className="w-full h-full touch-none" />
+
+      {/* Floating Toolbar */}
+      <div className={`absolute bottom-6 right-6 flex flex-col gap-2 p-2 rounded-xl shadow-xl transition-all ${glassClass}`}>
+        <button onClick={handleFit} className="p-2 rounded-lg hover:bg-teal-500/20 text-teal-600 transition-colors" title="وسط چین"><Maximize size={20} /></button>
+        <button onClick={handleZoomIn} className="p-2 rounded-lg hover:bg-teal-500/20 text-teal-600 transition-colors"><ZoomIn size={20} /></button>
+        <button onClick={handleZoomOut} className="p-2 rounded-lg hover:bg-teal-500/20 text-teal-600 transition-colors"><ZoomOut size={20} /></button>
+        <div className="h-px bg-slate-300 dark:bg-slate-600 my-1 mx-2"></div>
+        <button onClick={() => onOrientationChange('vertical')} className={`p-2 rounded-lg transition-colors ${orientation === 'vertical' ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title="عمودی"><ArrowDown size={20} /></button>
+        <button onClick={() => onOrientationChange('horizontal')} className={`p-2 rounded-lg transition-colors ${orientation === 'horizontal' ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title="افقی"><ArrowRight size={20} /></button>
+        <div className="h-px bg-slate-300 dark:bg-slate-600 my-1 mx-2"></div>
+        <button onClick={() => setLinkStyle(linkStyle === 'curved' ? 'straight' : 'curved')} className={`p-2 rounded-lg transition-colors ${linkStyle === 'curved' ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title="تغییر نوع خط"><GitBranch size={20} /></button>
+        <button onClick={() => setPreventOverlap(!preventOverlap)} className={`p-2 rounded-lg transition-colors ${preventOverlap ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title="جلوگیری از تداخل"><GitMerge size={20} /></button>
+      </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
           <div 
-            style={{ 
-                position: 'absolute', 
-                left: selectedNodePos.x + 50, 
-                top: selectedNodePos.y - 30,
-                zIndex: 40 // Reduced z-index to be below modal
-            }}
-            className="flex flex-col gap-2 animate-in fade-in zoom-in duration-200"
+            className={`fixed z-50 rounded-xl shadow-2xl p-2 min-w-[180px] context-menu-enter ${glassClass} border ${theme === 'dark' ? 'border-slate-700 text-slate-200' : 'border-slate-100 text-slate-700'}`}
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+            onClick={(e) => e.stopPropagation()}
           >
-              <button onClick={() => onOpenDetails(nodeMapRef.current.get(selectedId)?.data as FamilyMember)} className="bg-slate-700 text-white p-2 rounded-full shadow-lg hover:bg-slate-900 hover:scale-110 transition-all border-2 border-white" title="مشاهده پروفایل کامل">
-                  <User size={16}/>
-              </button>
-              <button onClick={() => onAddChild(selectedId)} className="bg-teal-500 text-white p-2 rounded-full shadow-lg hover:bg-teal-600 hover:scale-110 transition-all border-2 border-white" title="افزودن فرزند">
-                  <Plus size={16}/>
-              </button>
-              <button onClick={() => onAddSibling(selectedId)} className="bg-blue-500 text-white p-2 rounded-full shadow-lg hover:bg-blue-600 hover:scale-110 transition-all border-2 border-white" title="افزودن هم‌سطح">
-                  <GitBranch size={16}/>
-              </button>
+              <button onClick={() => { onNodeClick(data); onOpenDetails(nodeMapRef.current.get(contextMenu.memberId)?.data!); setContextMenu(null); }} className="w-full text-right px-4 py-2 hover:bg-teal-500/10 rounded-lg flex items-center gap-2 text-sm"><Edit size={16}/> ویرایش / مشاهده</button>
+              <button onClick={() => { onAddChild && onAddChild(contextMenu.memberId); setContextMenu(null); }} className="w-full text-right px-4 py-2 hover:bg-teal-500/10 rounded-lg flex items-center gap-2 text-sm"><Plus size={16}/> افزودن فرزند</button>
+              <button onClick={() => { onAddSibling && onAddSibling(contextMenu.memberId); setContextMenu(null); }} className="w-full text-right px-4 py-2 hover:bg-teal-500/10 rounded-lg flex items-center gap-2 text-sm"><GitBranch size={16}/> افزودن هم‌سطح</button>
+              <button onClick={() => { onAddSpouse && onAddSpouse(contextMenu.memberId); setContextMenu(null); }} className="w-full text-right px-4 py-2 hover:bg-pink-500/10 text-pink-500 rounded-lg flex items-center gap-2 text-sm"><Heart size={16}/> افزودن همسر</button>
+              <div className="h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
+              <button onClick={() => { onDeleteMember && onDeleteMember(contextMenu.memberId); setContextMenu(null); }} className="w-full text-right px-4 py-2 hover:bg-red-500/10 text-red-500 rounded-lg flex items-center gap-2 text-sm"><Trash2 size={16}/> حذف</button>
           </div>
       )}
 
-      {/* Floating Toolbar */}
-      <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
-          
-          {/* Orientation Controls */}
-          <div className={`${glassClass} shadow-lg rounded-xl p-1 flex flex-col gap-1 backdrop-blur-md`}>
-             <button 
-                onClick={() => onOrientationChange('vertical')} 
-                className={`p-2 rounded-lg transition-colors ${orientation === 'vertical' ? 'bg-teal-500 text-white shadow-md' : (theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50')}`} 
-                title="نمایش عمودی"
-             >
-                  <ArrowDown size={20} />
-             </button>
-             <button 
-                onClick={() => onOrientationChange('horizontal')} 
-                className={`p-2 rounded-lg transition-colors ${orientation === 'horizontal' ? 'bg-teal-500 text-white shadow-md' : (theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50')}`} 
-                title="نمایش افقی"
-             >
-                  <ArrowRight size={20} />
-             </button>
-          </div>
-
-          {/* Visual Settings */}
-          <div className={`${glassClass} shadow-lg rounded-xl p-1 flex flex-col gap-1 backdrop-blur-md`}>
-             <button onClick={() => setLinkStyle(prev => prev === 'curved' ? 'straight' : 'curved')} className={`p-2 rounded-lg transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50'}`} title="تغییر نوع خطوط">
-                  <GitMerge size={20} />
-             </button>
-             <button onClick={() => setPreventOverlap(!preventOverlap)} className={`p-2 rounded-lg transition-colors ${preventOverlap ? 'bg-indigo-100/50 text-indigo-600' : (theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50')}`} title="جلوگیری از تداخل خطوط">
-                  <Route size={20} />
-             </button>
-             <button onClick={() => setHeatmapMode(!heatmapMode)} className={`p-2 rounded-lg transition-colors ${heatmapMode ? 'bg-orange-100/50 text-orange-600' : (theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50')}`} title="نقشه حرارتی نسل‌ها">
-                  <div className="w-5 h-5 rounded bg-gradient-to-br from-slate-800 to-slate-300 border border-white/30"></div>
-             </button>
-          </div>
-
-          {/* Zoom Controls */}
-          <div className={`${glassClass} shadow-lg rounded-xl p-1 flex flex-col gap-1 backdrop-blur-md`}>
-              <button onClick={() => handleZoom(1.2)} className={`p-2 rounded-lg transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50'}`} title="بزرگنمایی">
-                  <ZoomIn size={20} />
-              </button>
-              <button onClick={() => handleZoom(0.8)} className={`p-2 rounded-lg transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50'}`} title="کوچک‌نمایی">
-                  <ZoomOut size={20} />
-              </button>
-               <button onClick={handleFit} className={`p-2 rounded-lg transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50'}`} title="بازنشانی و وسط‌چین">
-                  <Maximize size={20} />
-              </button>
-          </div>
-
-          {/* Export */}
-          <div className={`${glassClass} shadow-lg rounded-xl p-1 backdrop-blur-md`}>
-               <button onClick={handleDownloadSVG} className={`p-2 rounded-lg ${theme === 'dark' ? 'text-teal-400 hover:bg-white/10' : 'text-teal-600 hover:bg-white/50'}`} title="دانلود تصویر">
-                  <ImageIcon size={20} />
-              </button>
-          </div>
-      </div>
-
-      <svg ref={svgRef} className="w-full h-full cursor-grab active:cursor-grabbing"></svg>
+      {/* Quick Action Floating Menu on Selection */}
+      {selectedNodePos && !contextMenu && (
+         <div 
+            className="absolute z-40 flex flex-col gap-2 context-menu-enter"
+            style={{ 
+                left: selectedNodePos.x, 
+                top: selectedNodePos.y, 
+                transform: 'translate(-50%, -100%) translateY(-50px)' 
+            }}
+         >
+             <div className={`flex gap-2 p-2 rounded-full shadow-lg border ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
+                 <button onClick={() => { if(selectedId) { onOpenDetails(nodeMapRef.current.get(selectedId)?.data!); } }} className="p-2 rounded-full hover:bg-teal-50 text-teal-600 transition-colors" title="مشاهده پروفایل"><User size={18}/></button>
+                 <div className="w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                 <button onClick={() => { if(selectedId && onAddChild) onAddChild(selectedId); }} className="p-2 rounded-full hover:bg-teal-50 text-teal-600 transition-colors" title="افزودن فرزند"><Plus size={18}/></button>
+                 <button onClick={() => { if(selectedId && onAddSibling) onAddSibling(selectedId); }} className="p-2 rounded-full hover:bg-blue-50 text-blue-600 transition-colors" title="افزودن هم‌سطح"><GitBranch size={18}/></button>
+             </div>
+         </div>
+      )}
     </div>
   );
 };

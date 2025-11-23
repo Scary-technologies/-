@@ -1,3 +1,4 @@
+
 import type { HierarchyPointNode } from 'd3';
 
 export interface Connection {
@@ -60,4 +61,4 @@ export interface AIRequestConfig {
   extraContext?: string;
 }
 
-export type AppTheme = 'modern' | 'vintage' | 'dark';
+export type AppTheme = 'modern' | 'dark';
