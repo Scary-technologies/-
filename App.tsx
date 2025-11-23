@@ -614,6 +614,7 @@ const App: React.FC = () => {
           onOpenDetails={handleOpenDetails}
           selectedId={selectedNodeId}
           orientation={orientation}
+          onOrientationChange={setOrientation}
           theme={theme}
           highlightedIds={highlightedIds}
           onAddChild={handleAddChild}

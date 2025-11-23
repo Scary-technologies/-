@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState, useLayoutEffect } from 'react';
 import * as d3 from 'd3';
 import { FamilyMember, AppTheme, Tag } from '../types';
-import { Maximize, ZoomIn, ZoomOut, Image as ImageIcon, GitMerge, Plus, GitBranch, Route, User } from 'lucide-react';
+import { Maximize, ZoomIn, ZoomOut, Image as ImageIcon, GitMerge, Plus, GitBranch, Route, User, ArrowDown, ArrowRight } from 'lucide-react';
 
 interface FamilyTreeProps {
   data: FamilyMember;
@@ -10,6 +10,7 @@ interface FamilyTreeProps {
   onOpenDetails: (member: FamilyMember) => void;
   selectedId?: string | null;
   orientation: 'horizontal' | 'vertical';
+  onOrientationChange: (orientation: 'horizontal' | 'vertical') => void;
   theme: AppTheme;
   highlightedIds: Set<string>;
   onAddChild?: (parentId: string) => void;
@@ -22,6 +23,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   onOpenDetails,
   selectedId, 
   orientation,
+  onOrientationChange,
   theme,
   highlightedIds,
   onAddChild,
@@ -43,18 +45,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   // Theme configuration
   const getThemeColors = (theme: AppTheme) => {
     switch (theme) {
-      case 'vintage':
-        return {
-          link: '#d3c6aa',
-          linkExtra: '#cb4b16',
-          maleGrad: ['#859900', '#859900'], // Olive
-          femaleGrad: ['#b58900', '#b58900'], // Yellow/Gold
-          text: '#433422',
-          textSecondary: '#887a66',
-          nodeStroke: '#586e75',
-          bgLabel: '#fdf6e3',
-          selectedRing: '#cb4b16'
-        };
       case 'dark':
         return {
           link: '#475569',
@@ -178,13 +168,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         });
 
     svg.call(zoom);
-    // Do not call zoom.transform here to avoid firing the event and causing a loop.
-    // We just let D3 internal state be what it is, or we'd need to set it silently which isn't easy.
-    // However, to ensure D3's internal state matches our state, we can do this on mount only, or verify.
-    // For now, we assume the user interaction drives the state.
-    // But if we want buttons to work, we need to sync.
-    // We can sync by assigning the transform property to the selection node directly if needed.
-    // Re-binding the transform to the element:
+    // Sync zoom state
     if (svg.node()) {
         // @ts-ignore
         d3.zoomTransform(svg.node()).k = zoomTransform.k;
@@ -491,7 +475,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr("dy", orientation === 'horizontal' ? "49" : "49")
       .style("text-anchor", "middle")
       .text((d: d3.HierarchyPointNode<FamilyMember>) => d.data.name)
-      .style("font-family", theme === 'vintage' ? 'Noto Naskh Arabic' : 'Vazirmatn')
+      .style("font-family", 'Vazirmatn')
       .style("font-size", "12px")
       .style("font-weight", "bold")
       .style("fill", colors.text);
@@ -502,7 +486,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr("dy", orientation === 'horizontal' ? "64" : "64")
       .style("text-anchor", "middle")
       .text((d: d3.HierarchyPointNode<FamilyMember>) => d.data.relation || '')
-      .style("font-family", theme === 'vintage' ? 'Noto Naskh Arabic' : 'Vazirmatn')
+      .style("font-family", 'Vazirmatn')
       .style("font-size", "10px")
       .style("fill", colors.textSecondary);
       
@@ -573,7 +557,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
 
-  }, [data, dimensions, onNodeClick, onOpenDetails, selectedId, orientation, linkStyle, preventOverlap, theme, highlightedIds, heatmapMode]); // Removed zoomTransform
+  }, [data, dimensions, onNodeClick, onOpenDetails, selectedId, orientation, linkStyle, preventOverlap, theme, highlightedIds, heatmapMode]); 
 
   // Handlers (handleZoom, handleFit, handleDownloadSVG)
   const handleZoom = (factor: number) => {
@@ -586,11 +570,56 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   };
 
   const handleFit = () => {
+      // Logic for calculating bounding box of visible nodes
       if (svgRef.current && zoomRef.current) {
-           d3.select(svgRef.current)
+          const visibleNodes: any[] = [];
+          if(nodeMapRef.current.size > 0) {
+             nodeMapRef.current.forEach(node => {
+                 if(node.data.relation !== 'SystemRoot') visibleNodes.push(node);
+             });
+          }
+
+          if (visibleNodes.length === 0) return;
+
+          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+          
+          visibleNodes.forEach(node => {
+              const x = orientation === 'horizontal' ? node.y : node.x;
+              const y = orientation === 'horizontal' ? node.x : node.y;
+              if (x < minX) minX = x;
+              if (x > maxX) maxX = x;
+              if (y < minY) minY = y;
+              if (y > maxY) maxY = y;
+          });
+
+          // Add padding
+          minX -= 50; maxX += 50;
+          minY -= 50; maxY += 50;
+
+          const boundsWidth = maxX - minX;
+          const boundsHeight = maxY - minY;
+          
+          const midX = (minX + maxX) / 2;
+          const midY = (minY + maxY) / 2;
+
+          const scale = 0.9 / Math.max(boundsWidth / dimensions.width, boundsHeight / dimensions.height);
+          
+          // Margin offsets (120, 80) must be accounted for
+          const translate = [
+              dimensions.width / 2 - midX * scale + (120 * (1-scale)), // Approximate correction
+              dimensions.height / 2 - midY * scale + (80 * (1-scale))
+          ];
+
+          d3.select(svgRef.current)
             .transition()
             .duration(750)
-            .call(zoomRef.current.transform, d3.zoomIdentity.translate(dimensions.width/2, 100).scale(1));
+            .call(
+                zoomRef.current.transform, 
+                d3.zoomIdentity
+                    .translate(dimensions.width / 2, dimensions.height / 2)
+                    .scale(scale)
+                    .translate(-midX - 120, -midY - 80)
+            );
       }
   };
 
@@ -607,19 +636,19 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       document.body.removeChild(link);
   };
 
-  const glassClass = theme === 'dark' ? 'glass-panel-dark' : (theme === 'vintage' ? 'glass-panel-vintage' : 'glass-panel');
+  const glassClass = theme === 'dark' ? 'glass-panel-dark' : 'glass-panel';
 
   return (
     <div ref={wrapperRef} className="w-full h-full rounded-2xl overflow-hidden relative">
       
-      {/* Quick Actions Floating Menu - Visible only when a node is selected */}
+      {/* Quick Actions Floating Menu */}
       {selectedId && selectedNodePos && onAddChild && onAddSibling && (
           <div 
             style={{ 
                 position: 'absolute', 
                 left: selectedNodePos.x + 50, 
                 top: selectedNodePos.y - 30,
-                zIndex: 1 // Higher index to float above SVG but below Modal
+                zIndex: 40 // Reduced z-index to be below modal
             }}
             className="flex flex-col gap-2 animate-in fade-in zoom-in duration-200"
           >
@@ -638,6 +667,24 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       {/* Floating Toolbar */}
       <div className="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
           
+          {/* Orientation Controls */}
+          <div className={`${glassClass} shadow-lg rounded-xl p-1 flex flex-col gap-1 backdrop-blur-md`}>
+             <button 
+                onClick={() => onOrientationChange('vertical')} 
+                className={`p-2 rounded-lg transition-colors ${orientation === 'vertical' ? 'bg-teal-500 text-white shadow-md' : (theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50')}`} 
+                title="نمایش عمودی"
+             >
+                  <ArrowDown size={20} />
+             </button>
+             <button 
+                onClick={() => onOrientationChange('horizontal')} 
+                className={`p-2 rounded-lg transition-colors ${orientation === 'horizontal' ? 'bg-teal-500 text-white shadow-md' : (theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50')}`} 
+                title="نمایش افقی"
+             >
+                  <ArrowRight size={20} />
+             </button>
+          </div>
+
           {/* Visual Settings */}
           <div className={`${glassClass} shadow-lg rounded-xl p-1 flex flex-col gap-1 backdrop-blur-md`}>
              <button onClick={() => setLinkStyle(prev => prev === 'curved' ? 'straight' : 'curved')} className={`p-2 rounded-lg transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50'}`} title="تغییر نوع خطوط">
@@ -659,7 +706,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
               <button onClick={() => handleZoom(0.8)} className={`p-2 rounded-lg transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50'}`} title="کوچک‌نمایی">
                   <ZoomOut size={20} />
               </button>
-               <button onClick={handleFit} className={`p-2 rounded-lg transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50'}`} title="بازنشانی">
+               <button onClick={handleFit} className={`p-2 rounded-lg transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-white/10' : 'text-slate-600 hover:bg-white/50'}`} title="بازنشانی و وسط‌چین">
                   <Maximize size={20} />
               </button>
           </div>

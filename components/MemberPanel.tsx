@@ -192,10 +192,9 @@ ${formData.bio || '---'}
   
   const handleDeleteClick = (e: React.MouseEvent) => {
       e.stopPropagation();
-      if(window.confirm('آیا از حذف این عضو و تمام زیرمجموعه‌هایش اطمینان دارید؟ این عملیات غیرقابل بازگشت است.')) {
-          onDeleteMember(member.id);
-          onClose();
-      }
+      // No confirmation dialog, immediate deletion
+      onDeleteMember(member.id);
+      onClose();
   };
 
   return (
