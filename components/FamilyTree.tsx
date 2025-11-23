@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { FamilyMember, AppTheme } from '../types';
-import { Maximize, ZoomIn, ZoomOut, ArrowDown, ArrowRight, Heart, User, Edit, Plus, Trash2, GitBranch, GitMerge } from 'lucide-react';
+import { Maximize, ZoomIn, ZoomOut, ArrowDown, ArrowRight, Heart, User, Edit, Plus, Trash2, GitBranch, GitMerge, XCircle } from 'lucide-react';
 
 // SVG Paths for Gender Icons (Material Design Style)
 const MALE_ICON = "M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z";
@@ -47,7 +47,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const [linkStyle, setLinkStyle] = useState<'curved' | 'straight'>('curved');
   const [preventOverlap, setPreventOverlap] = useState(false);
   const [selectedNodePos, setSelectedNodePos] = useState<{x: number, y: number} | null>(null);
-  const [contextMenu, setContextMenu] = useState<{x: number, y: number, memberId: string} | null>(null);
+  
+  // Context Menu State
+  const [contextMenu, setContextMenu] = useState<{x: number, y: number, member: FamilyMember} | null>(null);
   
   const nodeMapRef = useRef<Map<string, d3.HierarchyPointNode<FamilyMember>>>(new Map());
 
@@ -113,9 +115,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
-  // Sync floating menu position
+  // Sync floating menu position (for selection)
   useEffect(() => {
-      if (selectedId && nodeMapRef.current.has(selectedId)) {
+      if (selectedId && nodeMapRef.current.has(selectedId) && !contextMenu) {
         const sNode = nodeMapRef.current.get(selectedId);
         if (sNode) {
             const t = zoomTransform;
@@ -128,9 +130,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         }
       } else {
         setSelectedNodePos(null);
-        setContextMenu(null);
       }
-  }, [selectedId, zoomTransform, orientation, dimensions]);
+  }, [selectedId, zoomTransform, orientation, dimensions, contextMenu]);
 
   // Main Graph Drawing
   useEffect(() => {
@@ -147,7 +148,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr("width", dimensions.width)
       .attr("height", dimensions.height)
       .on("click", () => {
-          setContextMenu(null);
+          setContextMenu(null); // Close context menu on bg click
       });
 
     const g = svg.append("g")
@@ -189,6 +190,27 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       nodeMapRef.current.set(d.data.id, d);
     });
     
+    // Spouse Post-Processing: Move spouses side-by-side
+    nodes.descendants().forEach(d => {
+        if (d.data.connections) {
+            const spouseConn = d.data.connections.find(c => c.label === 'همسر');
+            if (spouseConn) {
+                const spouseNode = nodeMapRef.current.get(spouseConn.targetId);
+                // Only move if both are direct children of system root (forest mode) or specifically structured
+                if (spouseNode && d.parent?.data.relation === 'SystemRoot' && spouseNode.parent?.data.relation === 'SystemRoot') {
+                     // Move spouse next to this node
+                     if (orientation === 'horizontal') {
+                         spouseNode.x = d.x;
+                         spouseNode.y = d.y + 80; // offset
+                     } else {
+                         spouseNode.y = d.y;
+                         spouseNode.x = d.x + 80;
+                     }
+                }
+            }
+        }
+    });
+
     // Extra Links (Connections)
     const extraLinks: any[] = [];
     nodes.descendants().forEach(sourceNode => {
@@ -207,9 +229,22 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     });
 
     const customLinkGenerator = (d: any) => {
-        const s = d.source;
-        const t = d.target;
+        let s = d.source;
+        let t = d.target;
         
+        // Handle Shared Children (Start from midpoint of parents)
+        if (s.data.connections && s.data.connections.some((c: any) => c.label === 'همسر')) {
+            const spouseConn = s.data.connections.find((c: any) => c.label === 'همسر');
+            const spouseNode = nodeMapRef.current.get(spouseConn.targetId);
+            if (spouseNode) {
+                 // Calculate midpoint
+                 const midX = (s.x + spouseNode.x) / 2;
+                 const midY = (s.y + spouseNode.y) / 2;
+                 // Temporarily override source for drawing
+                 s = { x: midX, y: midY };
+            }
+        }
+
         if (linkStyle === 'straight') {
              if (orientation === 'horizontal') {
                 return `M${s.y},${s.x} L${s.y},${t.x} L${t.y},${t.x}`; 
@@ -246,7 +281,18 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .data(extraLinks)
       .enter().append("path")
       .attr("class", "extra-link")
-      .attr("d", customLinkGenerator)
+      .attr("d", (d: any) => {
+          // Standard link generator for spouses/connections
+          const s = d.source;
+          const t = d.target;
+          if (orientation === 'horizontal') {
+              const mx = (s.y + t.y) / 2;
+              return `M ${s.y} ${s.x} C ${mx} ${s.x}, ${mx} ${t.x}, ${t.y} ${t.x}`;
+          } else {
+              const my = (s.y + t.y) / 2;
+              return `M ${s.x} ${s.y} C ${s.x} ${my}, ${t.x} ${my}, ${t.x} ${t.y}`;
+          }
+      })
       .attr("fill", "none")
       .attr("stroke", (d: any) => d.label === 'همسر' ? colors.linkSpouse : colors.linkExtra)
       .attr("stroke-width", "2px")
@@ -301,9 +347,18 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       })
       .on("contextmenu", (event, d: d3.HierarchyPointNode<FamilyMember>) => {
           event.preventDefault();
+          event.stopPropagation();
           if(d.data.relation === 'SystemRoot') return;
+          
+          // Select the node first for visual feedback
           onNodeClick(d.data);
-          setContextMenu({ x: event.clientX, y: event.clientY, memberId: d.data.id });
+          
+          // Open custom context menu
+          setContextMenu({ 
+              x: event.clientX, 
+              y: event.clientY, 
+              member: d.data 
+          });
       })
       .style("opacity", (d: d3.HierarchyPointNode<FamilyMember>) => {
          if (!isVisibleInTime(d.data)) return 0.05;
@@ -387,7 +442,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .style("font-size", "10px")
       .style("fill", colors.textSecondary);
 
-  }, [data, dimensions, orientation, theme, highlightedIds, linkStyle, preventOverlap, currentYear]); // Removed zoomTransform dependency to prevent loops
+  }, [data, dimensions, orientation, theme, highlightedIds, linkStyle, preventOverlap, currentYear]);
 
   // Handlers
   const handleZoomIn = () => {
@@ -434,6 +489,12 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
   const glassClass = theme === 'dark' ? 'glass-panel-dark' : 'glass-panel';
 
+  // --- Context Menu Handler Functions ---
+  const handleMenuAction = (action: () => void) => {
+      action();
+      setContextMenu(null);
+  };
+
   return (
     <div ref={wrapperRef} className="w-full h-full relative overflow-hidden bg-transparent" onContextMenu={(e) => e.preventDefault()}>
       <svg ref={svgRef} className="w-full h-full touch-none" />
@@ -451,23 +512,46 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         <button onClick={() => setPreventOverlap(!preventOverlap)} className={`p-2 rounded-lg transition-colors ${preventOverlap ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title="جلوگیری از تداخل"><GitMerge size={20} /></button>
       </div>
 
-      {/* Context Menu */}
+      {/* Custom Context Menu */}
       {contextMenu && (
           <div 
-            className={`fixed z-50 rounded-xl shadow-2xl p-2 min-w-[180px] context-menu-enter ${glassClass} border ${theme === 'dark' ? 'border-slate-700 text-slate-200' : 'border-slate-100 text-slate-700'}`}
-            style={{ top: contextMenu.y, left: contextMenu.x }}
+            className={`fixed z-[2001] rounded-xl shadow-2xl p-2 min-w-[200px] context-menu-enter ${glassClass} border ${theme === 'dark' ? 'border-slate-700 text-slate-200' : 'border-slate-100 text-slate-700'}`}
+            style={{ top: contextMenu.y + 10, left: contextMenu.x + 10 }} // Slight offset
             onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => e.preventDefault()}
           >
-              <button onClick={() => { onNodeClick(data); onOpenDetails(nodeMapRef.current.get(contextMenu.memberId)?.data!); setContextMenu(null); }} className="w-full text-right px-4 py-2 hover:bg-teal-500/10 rounded-lg flex items-center gap-2 text-sm"><Edit size={16}/> ویرایش / مشاهده</button>
-              <button onClick={() => { onAddChild && onAddChild(contextMenu.memberId); setContextMenu(null); }} className="w-full text-right px-4 py-2 hover:bg-teal-500/10 rounded-lg flex items-center gap-2 text-sm"><Plus size={16}/> افزودن فرزند</button>
-              <button onClick={() => { onAddSibling && onAddSibling(contextMenu.memberId); setContextMenu(null); }} className="w-full text-right px-4 py-2 hover:bg-teal-500/10 rounded-lg flex items-center gap-2 text-sm"><GitBranch size={16}/> افزودن هم‌سطح</button>
-              <button onClick={() => { onAddSpouse && onAddSpouse(contextMenu.memberId); setContextMenu(null); }} className="w-full text-right px-4 py-2 hover:bg-pink-500/10 text-pink-500 rounded-lg flex items-center gap-2 text-sm"><Heart size={16}/> افزودن همسر</button>
+              <div className="px-3 py-2 text-xs font-bold opacity-50 border-b border-dashed border-slate-300 dark:border-slate-600 mb-1">
+                  {contextMenu.member.name}
+              </div>
+
+              <button onClick={() => handleMenuAction(() => onOpenDetails(contextMenu.member))} className="w-full text-right px-3 py-2.5 hover:bg-teal-500/10 rounded-lg flex items-center gap-2 text-sm transition-colors">
+                  <User size={16} className="text-teal-500"/> مشاهده پروفایل
+              </button>
+              
               <div className="h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
-              <button onClick={() => { onDeleteMember && onDeleteMember(contextMenu.memberId); setContextMenu(null); }} className="w-full text-right px-4 py-2 hover:bg-red-500/10 text-red-500 rounded-lg flex items-center gap-2 text-sm"><Trash2 size={16}/> حذف</button>
+
+              <button onClick={() => handleMenuAction(() => onAddChild && onAddChild(contextMenu.member.id))} className="w-full text-right px-3 py-2.5 hover:bg-teal-500/10 rounded-lg flex items-center gap-2 text-sm transition-colors">
+                  <Plus size={16}/> افزودن فرزند
+              </button>
+              <button onClick={() => handleMenuAction(() => onAddSibling && onAddSibling(contextMenu.member.id))} className="w-full text-right px-3 py-2.5 hover:bg-blue-500/10 rounded-lg flex items-center gap-2 text-sm transition-colors">
+                  <GitBranch size={16}/> افزودن هم‌سطح
+              </button>
+              <button onClick={() => handleMenuAction(() => onAddSpouse && onAddSpouse(contextMenu.member.id))} className="w-full text-right px-3 py-2.5 hover:bg-pink-500/10 rounded-lg flex items-center gap-2 text-sm transition-colors text-pink-500 font-medium">
+                  <Heart size={16}/> ثبت همسر / ازدواج
+              </button>
+
+              <div className="h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
+
+              <button onClick={() => handleMenuAction(() => onDeleteMember && onDeleteMember(contextMenu.member.id))} className="w-full text-right px-3 py-2.5 hover:bg-red-500/10 text-red-500 rounded-lg flex items-center gap-2 text-sm transition-colors">
+                  <Trash2 size={16}/> حذف عضو
+              </button>
+              <button onClick={() => setContextMenu(null)} className="w-full text-right px-3 py-2.5 hover:bg-slate-500/10 text-slate-400 rounded-lg flex items-center gap-2 text-xs transition-colors mt-1">
+                  <XCircle size={14}/> بستن منو
+              </button>
           </div>
       )}
 
-      {/* Quick Action Floating Menu on Selection */}
+      {/* Quick Action Floating Menu (Only shows if Context Menu is CLOSED) */}
       {selectedNodePos && !contextMenu && (
          <div 
             className="absolute z-40 flex flex-col gap-2 context-menu-enter"
@@ -482,6 +566,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                  <div className="w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
                  <button onClick={() => { if(selectedId && onAddChild) onAddChild(selectedId); }} className="p-2 rounded-full hover:bg-teal-50 text-teal-600 transition-colors" title="افزودن فرزند"><Plus size={18}/></button>
                  <button onClick={() => { if(selectedId && onAddSibling) onAddSibling(selectedId); }} className="p-2 rounded-full hover:bg-blue-50 text-blue-600 transition-colors" title="افزودن هم‌سطح"><GitBranch size={18}/></button>
+                 <button onClick={() => { if(selectedId && onAddSpouse) onAddSpouse(selectedId); }} className="p-2 rounded-full hover:bg-pink-50 text-pink-500 transition-colors" title="افزودن همسر"><Heart size={18}/></button>
              </div>
          </div>
       )}
