@@ -165,7 +165,6 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
   
   const handleDeleteClick = (e: React.MouseEvent) => {
       e.stopPropagation();
-      // No confirmation dialog, immediate deletion
       onDeleteMember(member.id);
       onClose();
   };

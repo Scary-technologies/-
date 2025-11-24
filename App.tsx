@@ -3,7 +3,7 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { FamilyMember, AppTheme } from './types';
 import FamilyTree from './components/FamilyTree';
 import MemberPanel from './components/MemberPanel';
-import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, CheckCircle2, RefreshCcw, Plus, Moon, ListFilter, Clock, ScanEye, ArrowUpFromLine, ArrowDownToLine, RotateCcw } from 'lucide-react';
+import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, CheckCircle2, RefreshCcw, Plus, Moon, ListFilter, Clock, ScanEye, ArrowUpFromLine, ArrowDownToLine, RotateCcw, Keyboard, Command } from 'lucide-react';
 
 // Historical Context Data
 const historicalEvents = [
@@ -41,7 +41,6 @@ const defaultFamilyData: FamilyMember = {
       code: 'A10001',
       birthDate: '1300',
       location: 'تهران',
-      bio: 'سر سلسله خاندان...',
       children: []
     }
   ]
@@ -215,6 +214,7 @@ const App: React.FC = () => {
   // UI State
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   
   // Filter State
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
@@ -600,6 +600,78 @@ const App: React.FC = () => {
       event.target.value = '';
   };
 
+  // --- KEYBOARD SHORTCUTS ---
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 1. Global Shortcuts
+      
+      // Ctrl+S: Save (Visual Feedback)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        setSaveStatus('saving');
+        setTimeout(() => setSaveStatus('saved'), 500);
+        return;
+      }
+
+      // Ctrl+F: Search
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        const searchInput = document.querySelector('input[placeholder="جستجو..."]') as HTMLInputElement;
+        if (searchInput) {
+            searchInput.focus();
+            setIsSearchOpen(true);
+        }
+        return;
+      }
+
+      // Escape: Close Modals/Menus/Selection
+      if (e.key === 'Escape') {
+         if (detailsMember) { setDetailsMember(null); return; }
+         if (isShortcutsOpen) { setIsShortcutsOpen(false); return; }
+         if (isSearchOpen) { setIsSearchOpen(false); return; }
+         if (isFilterPanelOpen) { setIsFilterPanelOpen(false); return; }
+         if (isFocusMenuOpen) { setIsFocusMenuOpen(false); return; }
+         if (selectedNodeId) { setSelectedNodeId(null); return; }
+      }
+
+      // Shortcuts Help (?)
+      if (e.key === '?' && e.shiftKey) {
+          setIsShortcutsOpen(prev => !prev);
+          return;
+      }
+
+      // 2. Context Sensitive (Ignore if typing in input)
+      const target = e.target as HTMLElement;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+
+      if (selectedNodeId && !detailsMember) {
+          switch(e.key.toLowerCase()) {
+              case 'c': // Child
+                  handleAddChild(selectedNodeId);
+                  break;
+              case 's': // Sibling
+                  handleAddSibling(selectedNodeId);
+                  break;
+              case 'm': // Marriage
+                  handleAddSpouse(selectedNodeId);
+                  break;
+              case 'delete': // Delete
+              case 'backspace':
+                  handleDeleteMember(selectedNodeId);
+                  break;
+              case 'enter': // View
+                  const member = findNode(treeData, selectedNodeId);
+                  if (member) handleOpenDetails(member);
+                  break;
+          }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNodeId, detailsMember, isShortcutsOpen, isSearchOpen, isFilterPanelOpen, isFocusMenuOpen, treeData]);
+
+
   const glassClass = theme === 'dark' ? 'glass-panel-dark' : 'glass-panel';
 
   return (
@@ -774,6 +846,15 @@ const App: React.FC = () => {
         
         <div className="flex gap-3 items-center">
            
+           {/* Keyboard Shortcuts Toggle */}
+           <button 
+             onClick={() => setIsShortcutsOpen(!isShortcutsOpen)}
+             className={`p-2 rounded-lg border transition-all ${isShortcutsOpen ? 'bg-teal-500 text-white border-teal-500' : (theme === 'dark' ? 'bg-slate-800/50 border-slate-700 hover:text-white' : 'bg-white/40 border-white/50 hover:bg-white/60')}`}
+             title="میانبرهای صفحه کلید (?)"
+           >
+               <Keyboard size={18} />
+           </button>
+
            {/* Time-Lapse Toggle */}
            <button 
              onClick={() => setIsTimeSliderVisible(!isTimeSliderVisible)}
@@ -840,6 +921,54 @@ const App: React.FC = () => {
               <div className="flex justify-between text-[10px] opacity-40 mt-1 font-mono">
                   <span>{minYear}</span>
                   <span>{maxYear}</span>
+              </div>
+          </div>
+      )}
+
+      {/* Shortcuts Help Modal */}
+      {isShortcutsOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-enter" onClick={() => setIsShortcutsOpen(false)}>
+              <div className={`w-full max-w-md p-6 rounded-2xl shadow-2xl ${theme === 'dark' ? 'bg-slate-900 text-slate-200' : 'bg-white text-slate-800'}`} onClick={(e) => e.stopPropagation()}>
+                  <div className="flex justify-between items-center mb-4 border-b pb-2 opacity-70">
+                      <h3 className="text-lg font-bold flex items-center gap-2"><Keyboard size={20}/> میانبرهای صفحه کلید</h3>
+                      <button onClick={() => setIsShortcutsOpen(false)}><X size={20}/></button>
+                  </div>
+                  <div className="space-y-3 text-sm">
+                      <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
+                          <span>ذخیره تغییرات</span>
+                          <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">Ctrl + S</kbd>
+                      </div>
+                      <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
+                          <span>جستجو</span>
+                          <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">Ctrl + F</kbd>
+                      </div>
+                      <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
+                          <span>بستن پنجره / لغو انتخاب</span>
+                          <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">Esc</kbd>
+                      </div>
+                      <div className="h-px bg-current opacity-10 my-2"></div>
+                      <p className="text-xs opacity-50 px-2">وقتی عضوی انتخاب شده باشد:</p>
+                      <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
+                          <span>افزودن فرزند</span>
+                          <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">C</kbd>
+                      </div>
+                      <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
+                          <span>افزودن هم‌سطح (برادر/خواهر)</span>
+                          <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">S</kbd>
+                      </div>
+                      <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
+                          <span>ثبت همسر / ازدواج</span>
+                          <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">M</kbd>
+                      </div>
+                      <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
+                          <span>مشاهده پروفایل</span>
+                          <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">Enter</kbd>
+                      </div>
+                      <div className="flex justify-between items-center p-2 rounded hover:bg-black/5 text-red-500">
+                          <span>حذف عضو</span>
+                          <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">Delete</kbd>
+                      </div>
+                  </div>
               </div>
           </div>
       )}

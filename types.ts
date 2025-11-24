@@ -36,10 +36,8 @@ export interface FamilyMember {
   deathDate?: string;
   location?: string;
   occupation?: string;
-  bio?: string;
   events?: LifeEvent[];
   imageUrl?: string;
-  gallery?: string[]; // Array of image URLs
   voiceNotes?: VoiceNote[];
   tags?: Tag[];
   gender: 'male' | 'female' | 'other';
