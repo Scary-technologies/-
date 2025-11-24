@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import { FamilyMember, AppTheme } from '../types';
-import { Maximize, ZoomIn, ZoomOut, ArrowDown, ArrowRight, Heart, User, Edit, Plus, Trash2, GitBranch, GitMerge, XCircle } from 'lucide-react';
+import { Maximize, ZoomIn, ZoomOut, ArrowDown, ArrowRight, Heart, User, Plus, Trash2, GitBranch, GitMerge, XCircle } from 'lucide-react';
 
 // SVG Paths for Gender Icons (Material Design Style)
 const MALE_ICON = "M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z";
@@ -42,7 +42,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
-  const [zoomTransform, setZoomTransform] = useState(d3.zoomIdentity);
+  const [zoomTransform, setZoomTransform] = useState(d3.zoomIdentity.translate(120, 80));
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const [linkStyle, setLinkStyle] = useState<'curved' | 'straight'>('curved');
   const [preventOverlap, setPreventOverlap] = useState(false);
@@ -124,8 +124,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             const x = orientation === 'horizontal' ? sNode.y : sNode.x;
             const y = orientation === 'horizontal' ? sNode.x : sNode.y;
             // Apply zoom transform
-            const finalX = t.x + x * t.k + 120; // + margin.left
-            const finalY = t.y + y * t.k + 80;  // + margin.top
+            const finalX = t.x + x * t.k; 
+            const finalY = t.y + y * t.k;
             setSelectedNodePos({ x: finalX, y: finalY });
         }
       } else {
@@ -274,7 +274,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         }
     };
 
-    const gContent = g.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+    const gContent = g.append("g");
 
     // Draw Extra Links
     gContent.selectAll(".extra-link")
@@ -405,9 +405,22 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             const iconSize = 24 * iconScale;
             const offset = -iconSize / 2;
             
+            // Determine icon and color based on gender
+            let iconPath = MALE_ICON; // Default
+            let iconColor = colors.maleIcon;
+
+            if (d.data.gender === 'female') {
+                iconPath = FEMALE_ICON;
+                iconColor = colors.femaleIcon;
+            } else if (d.data.gender === 'other') {
+                // Keep default or use specific other icon if needed, currently reusing male icon as generic
+                iconPath = MALE_ICON;
+                iconColor = colors.textSecondary;
+            }
+
             el.append("path")
-              .attr("d", d.data.gender === 'male' ? MALE_ICON : FEMALE_ICON)
-              .attr("fill", d.data.gender === 'male' ? colors.maleIcon : colors.femaleIcon)
+              .attr("d", iconPath)
+              .attr("fill", iconColor)
               .attr("transform", `translate(${offset}, ${offset}) scale(${iconScale})`);
         }
 
