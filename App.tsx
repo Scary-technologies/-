@@ -3,7 +3,7 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { FamilyMember, AppTheme } from './types';
 import FamilyTree from './components/FamilyTree';
 import MemberPanel from './components/MemberPanel';
-import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, CheckCircle2, RefreshCcw, Plus, Moon, ListFilter, Clock } from 'lucide-react';
+import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, CheckCircle2, RefreshCcw, Plus, Moon, ListFilter, Clock, ScanEye, ArrowUpFromLine, ArrowDownToLine, RotateCcw } from 'lucide-react';
 
 // Historical Context Data
 const historicalEvents = [
@@ -224,6 +224,9 @@ const App: React.FC = () => {
       occupation: '',
       tag: ''
   });
+
+  // Focus Menu State
+  const [isFocusMenuOpen, setIsFocusMenuOpen] = useState(false);
 
   // Time-Lapse State
   const [minYear, setMinYear] = useState(1300);
@@ -648,6 +651,15 @@ const App: React.FC = () => {
                   >
                       <ListFilter size={20} />
                   </button>
+
+                  {/* Focus Button */}
+                  <button 
+                    onClick={() => setIsFocusMenuOpen(!isFocusMenuOpen)}
+                    className={`p-2 rounded-xl border transition-all ${isFocusMenuOpen || highlightedIds.size > 0 ? 'bg-teal-500 text-white border-teal-500' : (theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-slate-400 hover:text-slate-200' : 'bg-white/40 border-white/50 text-slate-500 hover:text-slate-800')}`}
+                    title="تمرکز"
+                  >
+                      <ScanEye size={20} />
+                  </button>
               </div>
 
               {/* Advanced Filter Panel */}
@@ -689,6 +701,41 @@ const App: React.FC = () => {
                         className="w-full text-xs text-red-400 hover:text-red-500 mt-2 text-center"
                       >
                           پاک کردن فیلترها
+                      </button>
+                  </div>
+              )}
+
+              {/* Focus Menu Panel */}
+              {isFocusMenuOpen && (
+                  <div className={`absolute top-full left-0 mt-2 w-64 rounded-xl shadow-xl z-50 p-2 space-y-1 ${theme === 'dark' ? 'glass-panel-dark border-slate-700' : 'glass-panel border-white/50'}`}>
+                      <h4 className="text-xs font-bold opacity-70 mb-2 px-2 pt-2">تمرکز و مسیریابی</h4>
+                      
+                      <button 
+                        onClick={() => selectedNodeId && handleHighlightPath(selectedNodeId, 'ancestors')}
+                        disabled={!selectedNodeId}
+                        className={`w-full text-right px-3 py-2.5 rounded-lg flex items-center gap-3 text-sm transition-colors ${!selectedNodeId ? 'opacity-50 cursor-not-allowed' : (theme === 'dark' ? 'hover:bg-white/10' : 'hover:bg-black/5')}`}
+                      >
+                          <ArrowUpFromLine size={16} className="text-teal-500"/>
+                          <span>نمایش اجداد و نیاکان</span>
+                      </button>
+
+                      <button 
+                        onClick={() => selectedNodeId && handleHighlightPath(selectedNodeId, 'descendants')}
+                        disabled={!selectedNodeId}
+                        className={`w-full text-right px-3 py-2.5 rounded-lg flex items-center gap-3 text-sm transition-colors ${!selectedNodeId ? 'opacity-50 cursor-not-allowed' : (theme === 'dark' ? 'hover:bg-white/10' : 'hover:bg-black/5')}`}
+                      >
+                          <ArrowDownToLine size={16} className="text-blue-500"/>
+                          <span>نمایش نوادگان و فرزندان</span>
+                      </button>
+
+                      <div className={`h-px my-1 ${theme === 'dark' ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+
+                      <button 
+                        onClick={() => handleHighlightPath('', 'reset')}
+                        className={`w-full text-right px-3 py-2.5 rounded-lg flex items-center gap-3 text-sm transition-colors ${theme === 'dark' ? 'hover:bg-white/10 text-slate-300' : 'hover:bg-black/5 text-slate-600'}`}
+                      >
+                          <RotateCcw size={16}/>
+                          <span>بازنشانی (حالت عادی)</span>
                       </button>
                   </div>
               )}
@@ -815,7 +862,6 @@ const App: React.FC = () => {
                   onAddConnection={handleAddConnection}
                   onRemoveConnection={handleRemoveConnection}
                   calculateRelationship={calculateRelationship}
-                  onHighlightPath={handleHighlightPath}
                   onAddSpouse={handleAddSpouse}
                   onClose={() => setDetailsMember(null)}
                 />

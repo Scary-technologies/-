@@ -14,7 +14,6 @@ interface MemberPanelProps {
   onAddConnection: (sourceId: string, targetId: string, label: string) => void;
   onRemoveConnection: (sourceId: string, targetId: string) => void;
   calculateRelationship: (id1: string, id2: string) => string;
-  onHighlightPath: (memberId: string, direction: 'ancestors' | 'descendants' | 'reset') => void;
   onAddSpouse: (memberId: string, existingSpouseId?: string) => void;
   onClose: () => void;
 }
@@ -32,7 +31,6 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
   onAddConnection,
   onRemoveConnection,
   calculateRelationship,
-  onHighlightPath,
   onAddSpouse,
   onClose
 }) => {
@@ -542,24 +540,6 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
           {/* SETTINGS TAB */}
           {activeTab === 'settings' && (
                <div className="space-y-6 animate-enter">
-                    <div className={`${cardClass} p-6 rounded-2xl`}>
-                        <h4 className="text-xs font-bold opacity-50 mb-4 flex items-center gap-2 uppercase tracking-wider"><Settings size={16}/> ابزارهای بصری و تمرکز</h4>
-                        <div className="space-y-3">
-                            <button onClick={() => onHighlightPath(member.id, 'ancestors')} className={`w-full py-3 border rounded-xl text-sm font-medium transition-colors flex justify-between px-5 items-center ${isDark ? 'bg-slate-800 border-slate-600 hover:border-teal-500' : 'bg-white/60 border-slate-200 hover:border-teal-500 hover:text-teal-600'}`}>
-                                <span>نمایش اجداد و نیاکان (Ancestors)</span>
-                                <ArrowUp size={16}/>
-                            </button>
-                            <button onClick={() => onHighlightPath(member.id, 'descendants')} className={`w-full py-3 border rounded-xl text-sm font-medium transition-colors flex justify-between px-5 items-center ${isDark ? 'bg-slate-800 border-slate-600 hover:border-teal-500' : 'bg-white/60 border-slate-200 hover:border-teal-500 hover:text-teal-600'}`}>
-                                <span>نمایش نوادگان و فرزندان (Descendants)</span>
-                                <ArrowUp size={16} className="rotate-180"/>
-                            </button>
-                             <button onClick={() => onHighlightPath(member.id, 'reset')} className={`w-full py-3 rounded-xl text-sm font-medium transition-colors flex justify-between px-5 items-center ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
-                                <span>بازنشانی حالت نمایش (حالت عادی)</span>
-                                <Settings size={16}/>
-                            </button>
-                        </div>
-                    </div>
-                    
                     <div className={`${cardClass} p-6 rounded-2xl border-red-100`}>
                         <h4 className="text-xs font-bold opacity-50 mb-4 uppercase tracking-wider text-red-400">منطقه خطر</h4>
                         <button onClick={handleDeleteClick} className="w-full py-4 bg-red-50/50 text-red-600 border border-red-100 rounded-2xl text-sm font-bold hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2 shadow-sm">

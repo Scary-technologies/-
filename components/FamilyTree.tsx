@@ -44,7 +44,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [zoomTransform, setZoomTransform] = useState(d3.zoomIdentity.translate(120, 80));
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
-  const [linkStyle, setLinkStyle] = useState<'curved' | 'straight'>('curved');
+  
+  // Link styles: 'curved' (Bezier), 'step' (Orthogonal), 'straight' (Direct)
+  const [linkStyle, setLinkStyle] = useState<'curved' | 'step' | 'straight'>('curved');
   const [preventOverlap, setPreventOverlap] = useState(false);
   const [selectedNodePos, setSelectedNodePos] = useState<{x: number, y: number} | null>(null);
   
@@ -245,6 +247,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             }
         }
 
+        // --- Straight Style ---
         if (linkStyle === 'straight') {
              if (orientation === 'horizontal') {
                 return `M${s.y},${s.x} L${s.y},${t.x} L${t.y},${t.x}`; 
@@ -253,6 +256,28 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
              }
         }
 
+        // --- Step (Orthogonal) Style ---
+        if (linkStyle === 'step') {
+            if (orientation === 'horizontal') {
+                // Horizontal Step: Move horizontally to mid, then vertical, then horizontal
+                const midY = (s.y + t.y) / 2;
+                return `M${s.y},${s.x} L${midY},${s.x} L${midY},${t.x} L${t.y},${t.x}`;
+            } else {
+                // Vertical Step: Move vertically to mid, then horizontal, then vertical
+                const midX = (s.x + t.x) / 2; // Actually y-axis in vertical visual, x-axis in d3 coords
+                // Note: In D3 Tree, x is vertical-ish and y is horizontal-ish depending on projection
+                // Let's stick to calculated coordinates:
+                // Vertical orientation visual: x is horizontal position, y is vertical position
+                // s.x, s.y are visual coordinates here? No, D3 outputs x/y. 
+                // In my render below: translate(${d.x},${d.y}) for Vertical.
+                // So s.x is Horizontal pos, s.y is Vertical pos.
+                
+                const midY = (s.y + t.y) / 2;
+                return `M${s.x},${s.y} L${s.x},${midY} L${t.x},${midY} L${t.x},${t.y}`;
+            }
+        }
+
+        // --- Curved (Bezier) Style ---
         let offset = 0;
         if (preventOverlap) {
             const idVal = t.data.id ? t.data.id.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) : 0;
@@ -505,6 +530,12 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         );
   };
 
+  const toggleLinkStyle = () => {
+      if (linkStyle === 'curved') setLinkStyle('step');
+      else if (linkStyle === 'step') setLinkStyle('straight');
+      else setLinkStyle('curved');
+  };
+
   const glassClass = theme === 'dark' ? 'glass-panel-dark' : 'glass-panel';
 
   // --- Context Menu Handler Functions ---
@@ -526,7 +557,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         <button onClick={() => onOrientationChange('vertical')} className={`p-2 rounded-lg transition-colors ${orientation === 'vertical' ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title="عمودی"><ArrowDown size={20} /></button>
         <button onClick={() => onOrientationChange('horizontal')} className={`p-2 rounded-lg transition-colors ${orientation === 'horizontal' ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title="افقی"><ArrowRight size={20} /></button>
         <div className="h-px bg-slate-300 dark:bg-slate-600 my-1 mx-2"></div>
-        <button onClick={() => setLinkStyle(linkStyle === 'curved' ? 'straight' : 'curved')} className={`p-2 rounded-lg transition-colors ${linkStyle === 'curved' ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title="تغییر نوع خط"><GitBranch size={20} /></button>
+        <button onClick={toggleLinkStyle} className={`p-2 rounded-lg transition-colors ${linkStyle !== 'curved' ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title={`تغییر نوع خط: ${linkStyle === 'curved' ? 'منحنی' : linkStyle === 'step' ? 'شکسته' : 'صاف'}`}><GitBranch size={20} /></button>
         <button onClick={() => setPreventOverlap(!preventOverlap)} className={`p-2 rounded-lg transition-colors ${preventOverlap ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title="جلوگیری از تداخل"><GitMerge size={20} /></button>
       </div>
 
