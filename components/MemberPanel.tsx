@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { FamilyMember, LifeEvent, Tag, VoiceNote } from '../types';
-import { generateBiography } from '../services/geminiService';
-import { User, Calendar, MapPin, Sparkles, Plus, Trash2, Save, Calculator, ArrowUp, GitBranch, Camera, Briefcase, Settings, Network, Flag, Eye, EyeOff, Route, Image as ImageIcon, Mic, Tag as TagIcon, FileText, Play, X, Heart, HeartHandshake, Copy, Printer, ExternalLink } from 'lucide-react';
+import { FamilyMember, LifeEvent, Tag } from '../types';
+import { User, Calendar, MapPin, Plus, Trash2, Save, Calculator, ArrowUp, GitBranch, Camera, Briefcase, Settings, Network, X, Heart, HeartHandshake, Copy, Printer, Route } from 'lucide-react';
 
 interface MemberPanelProps {
   member: FamilyMember | null;
@@ -20,7 +19,7 @@ interface MemberPanelProps {
   onClose: () => void;
 }
 
-type Tab = 'info' | 'events' | 'bio' | 'gallery' | 'relations' | 'settings';
+type Tab = 'info' | 'events' | 'relations' | 'settings';
 
 const MemberPanel: React.FC<MemberPanelProps> = ({ 
   member, 
@@ -38,7 +37,6 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
   onClose
 }) => {
   const [activeTab, setActiveTab] = useState<Tab>('info');
-  const [isGenerating, setIsGenerating] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState<Partial<FamilyMember>>({});
   const [newConnectionTarget, setNewConnectionTarget] = useState<string>('');
@@ -52,7 +50,6 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
   const [newEvent, setNewEvent] = useState<Partial<LifeEvent>>({ title: '', date: '' });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
   
   const [calcTargetId, setCalcTargetId] = useState<string>('');
   const [calcResult, setCalcResult] = useState<string | null>(null);
@@ -87,32 +84,13 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleGenerateBio = async () => {
-    setIsGenerating(true);
-    const bio = await generateBiography({
-      name: formData.name || '',
-      birthDate: formData.birthDate,
-      location: formData.location,
-      relation: formData.relation,
-      extraContext: `Occupation: ${formData.occupation}. Gender: ${formData.gender}`
-    });
-    setFormData(prev => ({ ...prev, bio }));
-    setIsGenerating(false);
-    setEditMode(true);
-  };
-
-  const handleUploadImage = (e: React.ChangeEvent<HTMLInputElement>, isGallery = false) => {
+  const handleUploadImage = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
           const reader = new FileReader();
           reader.onloadend = () => {
               const result = reader.result as string;
-              if (isGallery) {
-                  const currentGallery = formData.gallery || [];
-                  handleChange('gallery', [...currentGallery, result]);
-              } else {
-                  handleChange('imageUrl', result);
-              }
+              handleChange('imageUrl', result);
           };
           reader.readAsDataURL(file);
       }
@@ -174,9 +152,6 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
 تاریخ وفات: ${formData.deathDate || '---'}
 محل: ${formData.location || '---'}
 کد شناسایی: ${formData.code || '---'}
-
-زندگینامه:
-${formData.bio || '---'}
     `.trim();
     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -275,9 +250,7 @@ ${formData.bio || '---'}
       <div className={`flex border-b overflow-x-auto no-scrollbar px-4 pt-2 sticky top-0 z-30 ${isDark ? 'bg-slate-900/90 border-slate-700' : 'bg-white/90 border-slate-200'}`}>
           {[
               {id: 'info', label: 'اطلاعات پایه', icon: User},
-              {id: 'bio', label: 'سرگذشت', icon: FileText},
               {id: 'events', label: 'تایم‌لاین', icon: Route},
-              {id: 'gallery', label: 'نگارخانه', icon: ImageIcon},
               {id: 'relations', label: 'روابط', icon: Network},
               {id: 'settings', label: 'تنظیمات', icon: Settings},
           ].map(tab => (
@@ -400,35 +373,6 @@ ${formData.bio || '---'}
               </div>
           )}
 
-          {/* BIO TAB */}
-          {activeTab === 'bio' && (
-              <div className="space-y-4 animate-enter">
-                  {editMode ? (
-                      <div className="space-y-3">
-                           <textarea 
-                             className={`w-full h-80 p-5 rounded-2xl border text-sm leading-8 outline-none focus:border-teal-500 transition-all ${isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white/50 border-slate-200'}`}
-                             value={formData.bio || ''}
-                             onChange={(e) => handleChange('bio', e.target.value)}
-                             placeholder="داستان زندگی این فرد را اینجا بنویسید..."
-                           />
-                           <button 
-                             onClick={handleGenerateBio}
-                             disabled={isGenerating}
-                             className="w-full py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:shadow-orange-500/30 hover:scale-[1.01] transition-all"
-                           >
-                               {isGenerating ? <span className="animate-spin">⏳</span> : <Sparkles size={18}/>}
-                               تولید متن پیشنهادی
-                           </button>
-                      </div>
-                  ) : (
-                      <div className={`p-8 rounded-2xl border ${isDark ? 'bg-slate-800/30 border-slate-700 text-slate-300' : 'bg-white/60 border-white/50 text-slate-700 shadow-sm'} leading-9 text-justify text-lg relative overflow-hidden`}>
-                          <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-teal-400 via-amber-400 to-pink-400 opacity-50"></div>
-                          {formData.bio ? formData.bio : <div className="text-center opacity-40 py-10 flex flex-col items-center gap-2"><FileText size={40} strokeWidth={1}/>هنوز زندگینامه‌ای ثبت نشده است.</div>}
-                      </div>
-                  )}
-              </div>
-          )}
-
           {/* EVENTS TAB */}
           {activeTab === 'events' && (
                <div className="space-y-6 animate-enter px-2">
@@ -473,38 +417,6 @@ ${formData.bio || '---'}
                            </div>
                        )}
                    </div>
-               </div>
-          )}
-
-          {/* GALLERY TAB */}
-          {activeTab === 'gallery' && (
-               <div className="animate-enter">
-                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                       {formData.gallery?.map((img, idx) => (
-                           <div key={idx} className="aspect-square rounded-2xl overflow-hidden relative group shadow-lg border border-white/10 cursor-pointer">
-                               <img src={img} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt={`Gallery ${idx}`} />
-                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                   <Eye size={24} className="text-white drop-shadow-md"/>
-                               </div>
-                               {editMode && (
-                                   <button 
-                                     onClick={(e) => { e.stopPropagation(); handleChange('gallery', formData.gallery?.filter((_, i) => i !== idx)); }}
-                                     className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 shadow-lg"
-                                   >
-                                       <Trash2 size={16}/>
-                                   </button>
-                               )}
-                           </div>
-                       ))}
-                       <div 
-                         onClick={() => galleryInputRef.current?.click()}
-                         className={`aspect-square rounded-2xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-[1.02] ${isDark ? 'border-slate-700 text-slate-500 hover:border-teal-500 hover:text-teal-400 bg-slate-800/30' : 'border-slate-300 text-slate-400 hover:border-teal-500 hover:text-teal-600 hover:bg-teal-50/50'}`}
-                       >
-                           <Plus size={32} className="mb-2 opacity-50" />
-                           <span className="text-xs font-bold">افزودن تصویر</span>
-                       </div>
-                   </div>
-                   <input type="file" ref={galleryInputRef} className="hidden" onChange={(e) => handleUploadImage(e, true)} accept="image/*" />
                </div>
           )}
 
@@ -620,7 +532,7 @@ ${formData.bio || '---'}
                     </div>
                     {calcResult && (
                         <div className="bg-white/90 p-4 rounded-xl border border-teal-200 text-center text-teal-800 font-bold text-lg animate-fade-in-scale shadow-sm flex items-center justify-center gap-2">
-                           <Sparkles size={16} className="text-amber-500"/> {calcResult}
+                           {calcResult}
                         </div>
                     )}
                 </div>
@@ -631,7 +543,7 @@ ${formData.bio || '---'}
           {activeTab === 'settings' && (
                <div className="space-y-6 animate-enter">
                     <div className={`${cardClass} p-6 rounded-2xl`}>
-                        <h4 className="text-xs font-bold opacity-50 mb-4 flex items-center gap-2 uppercase tracking-wider"><Eye size={16}/> ابزارهای بصری و تمرکز</h4>
+                        <h4 className="text-xs font-bold opacity-50 mb-4 flex items-center gap-2 uppercase tracking-wider"><Settings size={16}/> ابزارهای بصری و تمرکز</h4>
                         <div className="space-y-3">
                             <button onClick={() => onHighlightPath(member.id, 'ancestors')} className={`w-full py-3 border rounded-xl text-sm font-medium transition-colors flex justify-between px-5 items-center ${isDark ? 'bg-slate-800 border-slate-600 hover:border-teal-500' : 'bg-white/60 border-slate-200 hover:border-teal-500 hover:text-teal-600'}`}>
                                 <span>نمایش اجداد و نیاکان (Ancestors)</span>
@@ -643,7 +555,7 @@ ${formData.bio || '---'}
                             </button>
                              <button onClick={() => onHighlightPath(member.id, 'reset')} className={`w-full py-3 rounded-xl text-sm font-medium transition-colors flex justify-between px-5 items-center ${isDark ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
                                 <span>بازنشانی حالت نمایش (حالت عادی)</span>
-                                <EyeOff size={16}/>
+                                <Settings size={16}/>
                             </button>
                         </div>
                     </div>

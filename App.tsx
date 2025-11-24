@@ -3,7 +3,7 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { FamilyMember, AppTheme } from './types';
 import FamilyTree from './components/FamilyTree';
 import MemberPanel from './components/MemberPanel';
-import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, Cloud, CheckCircle2, RefreshCcw, Plus, Moon, ListFilter, Clock } from 'lucide-react';
+import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, CheckCircle2, RefreshCcw, Plus, Moon, ListFilter, Clock } from 'lucide-react';
 
 // Historical Context Data
 const historicalEvents = [
@@ -769,6 +769,8 @@ const App: React.FC = () => {
           highlightedIds={highlightedIds}
           onAddChild={handleAddChild}
           onAddSibling={handleAddSibling}
+          onAddSpouse={handleAddSpouse}
+          onDeleteMember={handleDeleteMember}
           currentYear={isTimeSliderVisible ? currentYear : undefined}
         />
       </div>

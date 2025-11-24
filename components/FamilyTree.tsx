@@ -400,10 +400,15 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
               .attr("preserveAspectRatio", "xMidYMid slice");
         } else {
             // Draw Gender Icon if no image
+            // Scale up for better visibility inside the 30px radius circle
+            const iconScale = 1.5; 
+            const iconSize = 24 * iconScale;
+            const offset = -iconSize / 2;
+            
             el.append("path")
               .attr("d", d.data.gender === 'male' ? MALE_ICON : FEMALE_ICON)
               .attr("fill", d.data.gender === 'male' ? colors.maleIcon : colors.femaleIcon)
-              .attr("transform", "translate(-12, -12) scale(1)");
+              .attr("transform", `translate(${offset}, ${offset}) scale(${iconScale})`);
         }
 
         // Add Heart Icon if spouse exists
