@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { FamilyMember, LifeEvent, Tag } from '../types';
-import { User, Calendar, MapPin, Plus, Trash2, Save, Calculator, ArrowUp, GitBranch, Camera, Briefcase, Settings, Network, X, Heart, HeartHandshake, Copy, Printer, Route } from 'lucide-react';
+import { User, Calendar, MapPin, Plus, Trash2, Save, Calculator, ArrowUp, ArrowDown, GitBranch, Camera, Briefcase, Settings, Network, X, Heart, HeartHandshake, Copy, Printer, Route } from 'lucide-react';
 
 interface MemberPanelProps {
   member: FamilyMember | null;
@@ -421,19 +421,65 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
           {activeTab === 'relations' && (
             <div className="space-y-6 animate-enter">
                 
-                <div className="grid grid-cols-2 gap-4">
-                    <button onClick={() => onAddChild(member.id)} className={`${cardClass} p-4 rounded-2xl flex flex-col items-center gap-3 hover:border-teal-500 group transition-all`}>
-                        <div className="bg-teal-100/20 p-3 rounded-full text-teal-600 group-hover:scale-110 transition-transform"><ArrowUp size={24} className="rotate-180"/></div>
-                        <span className="text-sm font-bold">افزودن فرزند</span>
-                    </button>
-                    <button onClick={() => onAddSibling(member.id)} className={`${cardClass} p-4 rounded-2xl flex flex-col items-center gap-3 hover:border-blue-500 group transition-all`}>
-                        <div className="bg-blue-100/20 p-3 rounded-full text-blue-600 group-hover:scale-110 transition-transform"><GitBranch size={24}/></div>
-                        <span className="text-sm font-bold">افزودن هم‌سطح</span>
-                    </button>
-                    <button onClick={() => setIsAddSpouseMode(!isAddSpouseMode)} className={`${cardClass} col-span-2 p-4 rounded-2xl flex flex-row items-center justify-center gap-3 hover:border-pink-500 group transition-all`}>
-                        <div className="bg-pink-100/20 p-2 rounded-full text-pink-600 group-hover:scale-110 transition-transform"><HeartHandshake size={24}/></div>
-                        <span className="text-sm font-bold">مدیریت همسر / ازدواج</span>
-                    </button>
+                <div className={`p-5 rounded-2xl ${isDark ? 'bg-slate-800/30 border border-slate-700' : 'bg-slate-50 border border-slate-200'}`}>
+                    <h4 className="text-xs font-bold opacity-60 mb-4 uppercase tracking-wider flex justify-between">
+                         اقدامات سریع
+                         <span className="text-[10px] opacity-70">میانبرهای صفحه کلید فعال است</span>
+                    </h4>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                         {/* Parent Button */}
+                         <button 
+                             onClick={onAddParent}
+                             className={`relative p-4 rounded-2xl flex flex-col items-center gap-2 border transition-all hover:shadow-md group ${isDark ? 'bg-slate-800 border-slate-700 hover:border-indigo-500' : 'bg-white border-slate-200 hover:border-indigo-500'}`}
+                             title="میانبر: P"
+                         >
+                            <span className="absolute top-2 right-2 text-[10px] font-mono opacity-40 border px-1 rounded">P</span>
+                            <div className="bg-indigo-100/20 p-2.5 rounded-full text-indigo-500 group-hover:scale-110 transition-transform">
+                                <ArrowUp size={24}/>
+                            </div>
+                            <span className="text-sm font-bold">افزودن والد</span>
+                         </button>
+
+                         {/* Spouse Button */}
+                         <button 
+                             onClick={() => setIsAddSpouseMode(!isAddSpouseMode)} 
+                             className={`relative p-4 rounded-2xl flex flex-col items-center gap-2 border transition-all hover:shadow-md group ${isDark ? 'bg-slate-800 border-slate-700 hover:border-pink-500' : 'bg-white border-slate-200 hover:border-pink-500'}`}
+                             title="میانبر: M"
+                         >
+                            <span className="absolute top-2 right-2 text-[10px] font-mono opacity-40 border px-1 rounded">M</span>
+                            <div className="bg-pink-100/20 p-2.5 rounded-full text-pink-500 group-hover:scale-110 transition-transform">
+                                <Heart size={24}/>
+                            </div>
+                            <span className="text-sm font-bold">مدیریت همسر</span>
+                         </button>
+
+                         {/* Sibling Button */}
+                         <button 
+                             onClick={() => onAddSibling(member.id)} 
+                             className={`relative p-4 rounded-2xl flex flex-col items-center gap-2 border transition-all hover:shadow-md group ${isDark ? 'bg-slate-800 border-slate-700 hover:border-blue-500' : 'bg-white border-slate-200 hover:border-blue-500'}`}
+                             title="میانبر: S"
+                         >
+                            <span className="absolute top-2 right-2 text-[10px] font-mono opacity-40 border px-1 rounded">S</span>
+                            <div className="bg-blue-100/20 p-2.5 rounded-full text-blue-600 group-hover:scale-110 transition-transform">
+                                <GitBranch size={24}/>
+                            </div>
+                            <span className="text-sm font-bold">افزودن هم‌سطح</span>
+                         </button>
+                         
+                         {/* Child Button */}
+                         <button 
+                             onClick={() => onAddChild(member.id)} 
+                             className={`relative p-4 rounded-2xl flex flex-col items-center gap-2 border transition-all hover:shadow-md group ${isDark ? 'bg-slate-800 border-slate-700 hover:border-teal-500' : 'bg-white border-slate-200 hover:border-teal-500'}`}
+                             title="میانبر: C"
+                         >
+                            <span className="absolute top-2 right-2 text-[10px] font-mono opacity-40 border px-1 rounded">C</span>
+                            <div className="bg-teal-100/20 p-2.5 rounded-full text-teal-600 group-hover:scale-110 transition-transform">
+                                <ArrowDown size={24}/>
+                            </div>
+                            <span className="text-sm font-bold">افزودن فرزند</span>
+                         </button>
+                    </div>
                 </div>
 
                 {isAddSpouseMode && (

@@ -202,7 +202,7 @@ const flattenTree = (node: FamilyMember): FamilyMember[] => {
 // --- MAIN COMPONENT ---
 
 // This key acts as the "filename" in the browser's local database
-const STORAGE_KEY = 'nasab_family_tree_db_json';
+const STORAGE_KEY = 'niyakan_family_tree_db_json';
 
 const App: React.FC = () => {
   const [treeData, setTreeData] = useState<FamilyMember>(defaultFamilyData);
@@ -572,7 +572,7 @@ const App: React.FC = () => {
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(treeData, null, 2));
       const downloadAnchorNode = document.createElement('a');
       downloadAnchorNode.setAttribute("href", dataStr);
-      downloadAnchorNode.setAttribute("download", "nasab_family_tree.json");
+      downloadAnchorNode.setAttribute("download", "niyakan_family_tree.json");
       document.body.appendChild(downloadAnchorNode);
       downloadAnchorNode.click();
       downloadAnchorNode.remove();
@@ -655,6 +655,9 @@ const App: React.FC = () => {
               case 'm': // Marriage
                   handleAddSpouse(selectedNodeId);
                   break;
+              case 'p': // Parent (Triggers Add Parent/Root)
+                   handleAddParent();
+                   break;
               case 'delete': // Delete
               case 'backspace':
                   handleDeleteMember(selectedNodeId);
@@ -687,7 +690,7 @@ const App: React.FC = () => {
                   <span className="text-xl">🌳</span> 
               </div>
               <div className="flex flex-col">
-                  <h1 className="text-lg font-bold tracking-tight leading-none">نسب‌نما</h1>
+                  <h1 className="text-lg font-bold tracking-tight leading-none">نیاکان</h1>
                   <div className="flex items-center gap-1 text-[10px] tracking-wider opacity-70">
                       {saveStatus === 'saving' && <><RefreshCcw size={10} className="animate-spin text-amber-500"/> ذخیره بی‌درنگ...</>}
                       {saveStatus === 'saved' && <><CheckCircle2 size={10} className="text-teal-500"/> بانک اطلاعاتی بروز</>}
@@ -726,9 +729,10 @@ const App: React.FC = () => {
 
                   {/* Focus Button */}
                   <button 
-                    onClick={() => setIsFocusMenuOpen(!isFocusMenuOpen)}
-                    className={`p-2 rounded-xl border transition-all ${isFocusMenuOpen || highlightedIds.size > 0 ? 'bg-teal-500 text-white border-teal-500' : (theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-slate-400 hover:text-slate-200' : 'bg-white/40 border-white/50 text-slate-500 hover:text-slate-800')}`}
-                    title="تمرکز"
+                    onClick={() => { if(selectedNodeId) setIsFocusMenuOpen(!isFocusMenuOpen); }}
+                    disabled={!selectedNodeId}
+                    className={`p-2 rounded-xl border transition-all ${isFocusMenuOpen || highlightedIds.size > 0 ? 'bg-teal-500 text-white border-teal-500' : (theme === 'dark' ? 'bg-slate-800/50 border-slate-700 text-slate-400 hover:text-slate-200' : 'bg-white/40 border-white/50 text-slate-500 hover:text-slate-800')} ${!selectedNodeId ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    title={selectedNodeId ? "تمرکز و مسیریابی (نیازمند انتخاب عضو)" : "برای استفاده از تمرکز، یک عضو را انتخاب کنید"}
                   >
                       <ScanEye size={20} />
                   </button>
@@ -959,6 +963,10 @@ const App: React.FC = () => {
                       <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
                           <span>ثبت همسر / ازدواج</span>
                           <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">M</kbd>
+                      </div>
+                      <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
+                          <span>افزودن والد (سرشاخه جدید)</span>
+                          <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">P</kbd>
                       </div>
                       <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
                           <span>مشاهده پروفایل</span>

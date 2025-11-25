@@ -1,7 +1,7 @@
 
 import { FamilyMember } from "../types";
 
-const DB_NAME = 'NasabDB';
+const DB_NAME = 'NiyakanDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'familyTrees';
 

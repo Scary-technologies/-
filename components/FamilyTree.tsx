@@ -103,6 +103,37 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     }
   };
 
+  // Smart Sort: Groups spouses together in SystemRoot
+  const organizeData = (inputData: FamilyMember) => {
+    if (!inputData.children || inputData.relation !== 'SystemRoot') return inputData;
+
+    const orderedChildren: FamilyMember[] = [];
+    const visitedIds = new Set<string>();
+
+    // Map for quick lookup
+    const childMap = new Map(inputData.children.map(c => [c.id, c]));
+
+    inputData.children.forEach(child => {
+        if (visitedIds.has(child.id)) return;
+        
+        orderedChildren.push(child);
+        visitedIds.add(child.id);
+
+        // Check for spouses in the same level (SystemRoot children)
+        if (child.connections) {
+            child.connections.forEach(conn => {
+                if (conn.label === 'همسر' && childMap.has(conn.targetId) && !visitedIds.has(conn.targetId)) {
+                    // Place spouse immediately after
+                    orderedChildren.push(childMap.get(conn.targetId)!);
+                    visitedIds.add(conn.targetId);
+                }
+            });
+        }
+    });
+
+    return { ...inputData, children: orderedChildren };
+  };
+
   useEffect(() => {
     const updateDimensions = () => {
       if (wrapperRef.current) {
@@ -144,13 +175,15 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     d3.select(svgRef.current).selectAll("*").remove();
 
-    const margin = { top: 80, right: 120, bottom: 80, left: 120 };
-    
+    // Organize data to keep spouses adjacent
+    const organizedData = organizeData(data);
+
     const svg = d3.select(svgRef.current)
       .attr("width", dimensions.width)
       .attr("height", dimensions.height)
       .on("click", () => {
           setContextMenu(null); // Close context menu on bg click
+          if (selectedId) onNodeClick({} as any); // Optional: Clear selection on bg click (handled by parent logic via onClearSelection generally, but here for safety)
       });
 
     const g = svg.append("g")
@@ -171,19 +204,29 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     svg.call(zoom);
     zoomRef.current = zoom;
 
-    // Tree Layout
+    // Tree Layout Configuration
     let treemap;
     if (orientation === 'horizontal') {
         treemap = d3.tree<FamilyMember>()
             .nodeSize([90, 240]) 
-            .separation((a, b) => a.parent === b.parent ? 1.2 : 2.5);
+            .separation((a, b) => {
+                // Check if spouses
+                const isSpouse = a.data.connections?.some(c => c.targetId === b.data.id && c.label === 'همسر') ||
+                                 b.data.connections?.some(c => c.targetId === a.data.id && c.label === 'همسر');
+                // Closer distance for spouses
+                return isSpouse ? 0.65 : (a.parent === b.parent ? 1.1 : 2.2);
+            });
     } else {
         treemap = d3.tree<FamilyMember>()
             .nodeSize([160, 160])
-            .separation((a, b) => a.parent === b.parent ? 1.2 : 2.5);
+            .separation((a, b) => {
+                const isSpouse = a.data.connections?.some(c => c.targetId === b.data.id && c.label === 'همسر') ||
+                                 b.data.connections?.some(c => c.targetId === a.data.id && c.label === 'همسر');
+                return isSpouse ? 0.65 : (a.parent === b.parent ? 1.1 : 2.2);
+            });
     }
 
-    const root = d3.hierarchy(data, (d) => d.children);
+    const root = d3.hierarchy(organizedData, (d) => d.children);
     // @ts-ignore
     const nodes = treemap(root);
 
@@ -192,26 +235,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       nodeMapRef.current.set(d.data.id, d);
     });
     
-    // Spouse Post-Processing: Move spouses side-by-side
-    nodes.descendants().forEach(d => {
-        if (d.data.connections) {
-            const spouseConn = d.data.connections.find(c => c.label === 'همسر');
-            if (spouseConn) {
-                const spouseNode = nodeMapRef.current.get(spouseConn.targetId);
-                // Only move if both are direct children of system root (forest mode) or specifically structured
-                if (spouseNode && d.parent?.data.relation === 'SystemRoot' && spouseNode.parent?.data.relation === 'SystemRoot') {
-                     // Move spouse next to this node
-                     if (orientation === 'horizontal') {
-                         spouseNode.x = d.x;
-                         spouseNode.y = d.y + 80; // offset
-                     } else {
-                         spouseNode.y = d.y;
-                         spouseNode.x = d.x + 80;
-                     }
-                }
-            }
-        }
-    });
+    // Note: Removed manual spouse post-processing loop. 
+    // The sorting + separation logic above handles positioning natively in D3 now.
 
     // Extra Links (Connections)
     const extraLinks: any[] = [];
@@ -259,19 +284,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         // --- Step (Orthogonal) Style ---
         if (linkStyle === 'step') {
             if (orientation === 'horizontal') {
-                // Horizontal Step: Move horizontally to mid, then vertical, then horizontal
                 const midY = (s.y + t.y) / 2;
                 return `M${s.y},${s.x} L${midY},${s.x} L${midY},${t.x} L${t.y},${t.x}`;
             } else {
-                // Vertical Step: Move vertically to mid, then horizontal, then vertical
-                const midX = (s.x + t.x) / 2; // Actually y-axis in vertical visual, x-axis in d3 coords
-                // Note: In D3 Tree, x is vertical-ish and y is horizontal-ish depending on projection
-                // Let's stick to calculated coordinates:
-                // Vertical orientation visual: x is horizontal position, y is vertical position
-                // s.x, s.y are visual coordinates here? No, D3 outputs x/y. 
-                // In my render below: translate(${d.x},${d.y}) for Vertical.
-                // So s.x is Horizontal pos, s.y is Vertical pos.
-                
                 const midY = (s.y + t.y) / 2;
                 return `M${s.x},${s.y} L${s.x},${midY} L${t.x},${midY} L${t.x},${t.y}`;
             }
@@ -307,9 +322,19 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .enter().append("path")
       .attr("class", "extra-link")
       .attr("d", (d: any) => {
-          // Standard link generator for spouses/connections
           const s = d.source;
           const t = d.target;
+          
+          // Calculate Euclidean distance to detect close neighbors
+          const dist = Math.sqrt(Math.pow(s.x - t.x, 2) + Math.pow(s.y - t.y, 2));
+          
+          // If extremely close (like sorted spouses), draw a flatter curve or straight line
+          if (dist < 180) { // Threshold for adjacent nodes
+             return orientation === 'horizontal' 
+                 ? `M ${s.y} ${s.x} L ${t.y} ${t.x}` 
+                 : `M ${s.x} ${s.y} L ${t.x} ${t.y}`;
+          }
+
           if (orientation === 'horizontal') {
               const mx = (s.y + t.y) / 2;
               return `M ${s.y} ${s.x} C ${mx} ${s.x}, ${mx} ${t.x}, ${t.y} ${t.x}`;
@@ -438,7 +463,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                 iconPath = FEMALE_ICON;
                 iconColor = colors.femaleIcon;
             } else if (d.data.gender === 'other') {
-                // Keep default or use specific other icon if needed, currently reusing male icon as generic
                 iconPath = MALE_ICON;
                 iconColor = colors.textSecondary;
             }
