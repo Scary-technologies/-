@@ -234,7 +234,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       };
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [zoomTransform]); // Re-bind if necessary, though handleFit uses refs
+  }, [zoomTransform]);
 
   // Sync floating menu position (for selection)
   useEffect(() => {
@@ -434,6 +434,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr("stroke-dasharray", (d: any) => d.label === 'همسر' ? "0" : "5,5")
       .attr("opacity", (d: any) => {
          if (!isVisibleInTime(d.source.data) || !isVisibleInTime(d.target.data)) return 0;
+         
          if (!hasHighlight) return 0.6;
          const srcHi = highlightedIds.has(d.source.data.id);
          const tgtHi = highlightedIds.has(d.target.data.id);
@@ -465,6 +466,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       })
       .style("opacity", (d: any) => {
          if (!isVisibleInTime(d.source.data) || !isVisibleInTime(d.target.data)) return 0;
+         
          if (!hasHighlight) return 1;
          if (highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id)) return 1;
          return 0.1;
@@ -505,12 +507,31 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .style("opacity", (d: HierarchyPointNode<FamilyMember>) => {
          if (!isVisibleInTime(d.data)) return 0.05;
          if (d.data.relation === 'SystemRoot') return 0;
+
          if (!hasHighlight) return 1;
          return highlightedIds.has(d.data.id) ? 1 : 0.2; 
       });
 
+    // Wrapper for animation
+    const animatedNode = node.append("g")
+      .attr("class", "animate-fade-in-scale");
+
+    // PULSE RING for Selected Node
+    animatedNode.each(function(d: any) {
+        if (selectedId === d.data.id) {
+            const el = select(this);
+            // Ripple Ring
+            el.append("circle")
+              .attr("r", 30)
+              .attr("fill", "none")
+              .attr("stroke", colors.selectedRing)
+              .attr("stroke-width", "2px")
+              .attr("class", "animate-pulse-ring opacity-50");
+        }
+    });
+
     // Node Circle Background (Neutral)
-    node.append("circle")
+    animatedNode.append("circle")
       .attr("r", 30)
       .attr("fill", colors.nodeFill)
       .attr("stroke", (d: any) => {
@@ -523,13 +544,13 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     // Clip Path for Images
     const clipPathId = (d: any) => `clip-${d.data.id}`;
-    node.append("clipPath")
+    animatedNode.append("clipPath")
       .attr("id", clipPathId)
       .append("circle")
       .attr("r", 28);
 
     // Node Image or Gender Icon
-    node.each(function(d: HierarchyPointNode<FamilyMember>) {
+    animatedNode.each(function(d: HierarchyPointNode<FamilyMember>) {
         const el = select(this);
         if (d.data.imageUrl) {
             el.append("image")
@@ -582,7 +603,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     });
 
     // Node Name
-    node.append("text")
+    animatedNode.append("text")
       .attr("dy", 45)
       .attr("text-anchor", "middle")
       .text((d: any) => d.data.name)
@@ -593,7 +614,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .style("text-shadow", "0px 1px 2px rgba(255,255,255,0.8)");
 
     // Node Date
-    node.append("text")
+    animatedNode.append("text")
       .attr("dy", 58)
       .attr("text-anchor", "middle")
       .text((d: any) => d.data.birthDate ? d.data.birthDate.split('/')[0] : '')
@@ -665,7 +686,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       <svg ref={svgRef} className="w-full h-full touch-none" />
 
       {/* Floating Toolbar */}
-      <div className={`absolute bottom-6 right-6 flex flex-col gap-2 p-2 rounded-xl shadow-xl transition-all ${glassClass}`}>
+      <div className={`absolute bottom-6 right-6 flex flex-col gap-2 p-2 rounded-xl shadow-xl transition-all animate-slide-up ${glassClass}`}>
         <button onClick={handleFit} className="p-2 rounded-lg hover:bg-teal-500/20 text-teal-600 transition-colors" title="وسط چین (Space)"><Maximize size={20} /></button>
         <button onClick={handleZoomIn} className="p-2 rounded-lg hover:bg-teal-500/20 text-teal-600 transition-colors"><ZoomIn size={20} /></button>
         <button onClick={handleZoomOut} className="p-2 rounded-lg hover:bg-teal-500/20 text-teal-600 transition-colors"><ZoomOut size={20} /></button>

@@ -3,7 +3,7 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { FamilyMember, AppTheme } from './types';
 import FamilyTree from './components/FamilyTree';
 import MemberPanel from './components/MemberPanel';
-import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, CheckCircle2, RefreshCcw, Plus, Moon, ListFilter, Clock, ScanEye, ArrowUpFromLine, ArrowDownToLine, RotateCcw, Keyboard, Command } from 'lucide-react';
+import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, CheckCircle2, RefreshCcw, Plus, Moon, ListFilter, Clock, ScanEye, ArrowUpFromLine, ArrowDownToLine, RotateCcw, Keyboard, Command, AlertTriangle, Info, CheckCircle } from 'lucide-react';
 
 // Historical Context Data
 const historicalEvents = [
@@ -111,12 +111,12 @@ const updateNodeInTree = (node: FamilyMember, updated: FamilyMember): FamilyMemb
   return node;
 };
 
-const addChildToNode = (node: FamilyMember, parentId: string): FamilyMember => {
+const addChildToNode = (node: FamilyMember, parentId: string, gender: 'male' | 'female' = 'male'): FamilyMember => {
   if (node.id === parentId) {
     const newChild: FamilyMember = {
       id: Date.now().toString(),
-      name: 'فرزند جدید',
-      gender: 'male',
+      name: gender === 'male' ? 'پسر جدید' : 'دختر جدید',
+      gender: gender,
       relation: 'Child',
       code: generateUniqueCode(),
       children: []
@@ -129,20 +129,20 @@ const addChildToNode = (node: FamilyMember, parentId: string): FamilyMember => {
   if (node.children) {
     return {
       ...node,
-      children: node.children.map(child => addChildToNode(child, parentId))
+      children: node.children.map(child => addChildToNode(child, parentId, gender))
     };
   }
   return node;
 };
 
-const addSiblingToNode = (root: FamilyMember, siblingId: string): FamilyMember => {
+const addSiblingToNode = (root: FamilyMember, siblingId: string, onError: (msg: string) => void): FamilyMember => {
     if (root.id === siblingId) {
-      alert("نمی‌توانید برای ریشه اصلی، هم‌سطح ایجاد کنید.");
+      onError("نمی‌توانید برای ریشه اصلی، هم‌سطح ایجاد کنید.");
       return root;
     }
     const parent = findParent(root, siblingId);
     if (parent) {
-       return addChildToNode(root, parent.id);
+       return addChildToNode(root, parent.id, 'male');
     }
     return root;
 };
@@ -367,14 +367,15 @@ const App: React.FC = () => {
   const handleUpdateMember = (updatedMember: FamilyMember) => {
     setTreeData(prev => updateNodeInTree(prev, updatedMember));
     setDetailsMember(updatedMember);
+    // Alert feedback removed or can be added back if needed
   };
 
-  const handleAddChild = (parentId: string) => {
-    setTreeData(prev => addChildToNode(prev, parentId));
+  const handleAddChild = (parentId: string, gender: 'male' | 'female' = 'male') => {
+    setTreeData(prev => addChildToNode(prev, parentId, gender));
   };
 
   const handleAddSibling = (siblingId: string) => {
-    setTreeData(prev => addSiblingToNode(prev, siblingId));
+    setTreeData(prev => addSiblingToNode(prev, siblingId, (msg) => alert(msg)));
   };
 
   const handleAddParent = () => {
@@ -443,7 +444,6 @@ const App: React.FC = () => {
           if (existingSpouseId) {
               newTree = addConnectionToNode(newTree, memberId, existingSpouseId, 'همسر');
               newTree = addConnectionToNode(newTree, existingSpouseId, memberId, 'همسر');
-              alert("ازدواج فامیلی ثبت شد.");
           } else {
               const member = findNode(newTree, memberId);
               const spouseGender = member?.gender === 'male' ? 'female' : 'male';
@@ -591,10 +591,10 @@ const App: React.FC = () => {
                   setTreeData(json); 
                   setDetailsMember(null); 
                   setSelectedNodeId(null); 
-                  alert("شجره‌نامه بارگذاری شد."); 
+                  alert("شجره‌نامه با موفقیت بارگذاری شد"); 
               } 
-              else alert("فایل نامعتبر است.");
-          } catch (err) { alert("خطا در خواندن فایل."); }
+              else alert("ساختار فایل نامعتبر است");
+          } catch (err) { alert("خطا در خواندن فایل"); }
       };
       reader.readAsText(fileObj);
       event.target.value = '';
@@ -646,8 +646,11 @@ const App: React.FC = () => {
 
       if (selectedNodeId && !detailsMember) {
           switch(e.key.toLowerCase()) {
-              case 'c': // Child
-                  handleAddChild(selectedNodeId);
+              case 'c': // Child (Default Male)
+                  handleAddChild(selectedNodeId, 'male');
+                  break;
+              case 'v': // Daughter (Female Child)
+                  handleAddChild(selectedNodeId, 'female');
                   break;
               case 's': // Sibling
                   handleAddSibling(selectedNodeId);
@@ -666,6 +669,10 @@ const App: React.FC = () => {
                   const member = findNode(treeData, selectedNodeId);
                   if (member) handleOpenDetails(member);
                   break;
+              case ' ': // Space for Fit/Focus
+                  e.preventDefault(); 
+                  // handled in FamilyTree component
+                  break;
           }
       }
     };
@@ -683,7 +690,7 @@ const App: React.FC = () => {
 
       {/* Header */}
       {!isFullScreen && (
-      <header className={`absolute top-0 left-0 right-0 ${glassClass} border-b-0 rounded-b-2xl mx-4 mt-2 px-4 py-3 flex justify-between items-center shadow-lg z-20 transition-all animate-fade-in-scale`}>
+      <header className={`absolute top-0 left-0 right-0 ${glassClass} border-b-0 rounded-b-2xl mx-4 mt-2 px-4 py-3 flex justify-between items-center shadow-lg z-20 transition-all animate-slide-down`}>
         <div className="flex items-center gap-4 lg:gap-6">
            <div className="flex items-center gap-3">
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg bg-gradient-to-br from-teal-500 to-teal-700`}>
@@ -740,7 +747,7 @@ const App: React.FC = () => {
 
               {/* Advanced Filter Panel */}
               {isFilterPanelOpen && (
-                  <div className={`absolute top-full right-0 mt-2 w-72 rounded-xl shadow-xl z-50 p-4 space-y-3 ${theme === 'dark' ? 'glass-panel-dark border-slate-700' : 'glass-panel border-white/50'}`}>
+                  <div className={`absolute top-full right-0 mt-2 w-72 rounded-xl shadow-xl z-50 p-4 space-y-3 animate-slide-up ${theme === 'dark' ? 'glass-panel-dark border-slate-700' : 'glass-panel border-white/50'}`}>
                       <h4 className="text-xs font-bold opacity-70 mb-2">فیلترهای پیشرفته</h4>
                       
                       <div className="grid grid-cols-2 gap-2">
@@ -783,7 +790,7 @@ const App: React.FC = () => {
 
               {/* Focus Menu Panel */}
               {isFocusMenuOpen && (
-                  <div className={`absolute top-full left-0 mt-2 w-64 rounded-xl shadow-xl z-50 p-2 space-y-1 ${theme === 'dark' ? 'glass-panel-dark border-slate-700' : 'glass-panel border-white/50'}`}>
+                  <div className={`absolute top-full left-0 mt-2 w-64 rounded-xl shadow-xl z-50 p-2 space-y-1 animate-slide-up ${theme === 'dark' ? 'glass-panel-dark border-slate-700' : 'glass-panel border-white/50'}`}>
                       <h4 className="text-xs font-bold opacity-70 mb-2 px-2 pt-2">تمرکز و مسیریابی</h4>
                       
                       <button 
@@ -818,7 +825,7 @@ const App: React.FC = () => {
 
               {/* Search Results Dropdown */}
               {(isSearchOpen && (searchQuery || filteredMembers.length > 0)) && (
-                  <div className={`absolute top-full left-0 w-80 mt-2 rounded-xl shadow-xl overflow-hidden z-40 max-h-64 overflow-y-auto custom-scrollbar ${theme === 'dark' ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-slate-100'}`}>
+                  <div className={`absolute top-full left-0 w-80 mt-2 rounded-xl shadow-xl overflow-hidden z-40 max-h-64 overflow-y-auto custom-scrollbar animate-slide-up ${theme === 'dark' ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-slate-100'}`}>
                       {filteredMembers.length > 0 ? (
                           filteredMembers.slice(0, 10).map(result => (
                               <button 
@@ -899,7 +906,7 @@ const App: React.FC = () => {
           onOrientationChange={setOrientation}
           theme={theme}
           highlightedIds={highlightedIds}
-          onAddChild={handleAddChild}
+          onAddChild={(id) => handleAddChild(id, 'male')} // Default handler for UI click
           onAddSibling={handleAddSibling}
           onAddSpouse={handleAddSpouse}
           onDeleteMember={handleDeleteMember}
@@ -909,7 +916,7 @@ const App: React.FC = () => {
 
       {/* Time-Lapse Slider Panel */}
       {isTimeSliderVisible && (
-          <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-lg z-30 p-4 rounded-2xl shadow-2xl backdrop-blur-lg border animate-enter ${theme === 'dark' ? 'bg-slate-900/80 border-slate-700 text-slate-200' : 'bg-white/80 border-white/50 text-slate-800'}`}>
+          <div className={`absolute bottom-6 left-1/2 -translate-x-1/2 w-full max-w-lg z-30 p-4 rounded-2xl shadow-2xl backdrop-blur-lg border animate-slide-up ${theme === 'dark' ? 'bg-slate-900/80 border-slate-700 text-slate-200' : 'bg-white/80 border-white/50 text-slate-800'}`}>
               <div className="flex justify-between items-center mb-2">
                   <span className="text-xs font-bold opacity-60">اسلایدر مرور زمان</span>
                   <span className="text-lg font-mono font-bold text-amber-500">{currentYear}</span>
@@ -931,7 +938,7 @@ const App: React.FC = () => {
 
       {/* Shortcuts Help Modal */}
       {isShortcutsOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-enter" onClick={() => setIsShortcutsOpen(false)}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-pop-in" onClick={() => setIsShortcutsOpen(false)}>
               <div className={`w-full max-w-md p-6 rounded-2xl shadow-2xl ${theme === 'dark' ? 'bg-slate-900 text-slate-200' : 'bg-white text-slate-800'}`} onClick={(e) => e.stopPropagation()}>
                   <div className="flex justify-between items-center mb-4 border-b pb-2 opacity-70">
                       <h3 className="text-lg font-bold flex items-center gap-2"><Keyboard size={20}/> میانبرهای صفحه کلید</h3>
@@ -947,14 +954,22 @@ const App: React.FC = () => {
                           <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">Ctrl + F</kbd>
                       </div>
                       <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
+                          <span>وسط چین / تمرکز</span>
+                          <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">Space</kbd>
+                      </div>
+                      <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
                           <span>بستن پنجره / لغو انتخاب</span>
                           <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">Esc</kbd>
                       </div>
                       <div className="h-px bg-current opacity-10 my-2"></div>
                       <p className="text-xs opacity-50 px-2">وقتی عضوی انتخاب شده باشد:</p>
                       <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
-                          <span>افزودن فرزند</span>
+                          <span>افزودن فرزند (پسر)</span>
                           <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">C</kbd>
+                      </div>
+                      <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
+                          <span>افزودن فرزند (دختر)</span>
+                          <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">V</kbd>
                       </div>
                       <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
                           <span>افزودن هم‌سطح (برادر/خواهر)</span>
@@ -983,7 +998,7 @@ const App: React.FC = () => {
 
       {/* Modal / Popup for Member Details */}
       {detailsMember && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-enter" onClick={() => setDetailsMember(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-pop-in" onClick={() => setDetailsMember(null)}>
             <div 
               className={`w-full max-w-4xl h-[85vh] shadow-2xl rounded-2xl overflow-hidden transform transition-all relative ${theme === 'dark' ? 'bg-slate-900' : 'bg-white'}`}
               onClick={(e) => e.stopPropagation()}
@@ -992,7 +1007,7 @@ const App: React.FC = () => {
                   member={detailsMember} 
                   allMembers={allMembers}
                   onUpdateMember={handleUpdateMember}
-                  onAddChild={handleAddChild}
+                  onAddChild={(pid) => handleAddChild(pid, 'male')}
                   onAddSibling={handleAddSibling}
                   onAddParent={handleAddParent}
                   onDeleteMember={handleDeleteMember}

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { FamilyMember, LifeEvent, Tag } from '../types';
-import { User, Calendar, MapPin, Plus, Trash2, Save, Calculator, ArrowUp, ArrowDown, GitBranch, Camera, Briefcase, Settings, Network, X, Heart, HeartHandshake, Copy, Printer, Route } from 'lucide-react';
+import { FamilyMember, Tag } from '../types';
+import { User, Calendar, MapPin, Plus, Trash2, Save, Calculator, ArrowUp, ArrowDown, GitBranch, Camera, Briefcase, Settings, Network, X, Heart, Printer, Copy, Baby, Link } from 'lucide-react';
 
 interface MemberPanelProps {
   member: FamilyMember | null;
@@ -18,7 +18,7 @@ interface MemberPanelProps {
   onClose: () => void;
 }
 
-type Tab = 'info' | 'events' | 'relations' | 'settings';
+type Tab = 'info' | 'relations' | 'settings';
 
 const MemberPanel: React.FC<MemberPanelProps> = ({ 
   member, 
@@ -37,27 +37,31 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
   const [activeTab, setActiveTab] = useState<Tab>('info');
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState<Partial<FamilyMember>>({});
+  
+  // Relations State
   const [newConnectionTarget, setNewConnectionTarget] = useState<string>('');
   const [newConnectionLabel, setNewConnectionLabel] = useState<string>('پسرعمو/دخترعمو');
   const [spouseTargetId, setSpouseTargetId] = useState<string>('');
   const [isAddSpouseMode, setIsAddSpouseMode] = useState(false);
   const [spouseType, setSpouseType] = useState<'new' | 'existing'>('new');
   
+  // Data Entry State
   const [newTag, setNewTag] = useState('');
-  const [newTagColor, setNewTagColor] = useState('#3b82f6');
-  const [newEvent, setNewEvent] = useState<Partial<LifeEvent>>({ title: '', date: '' });
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
+  const [newTagColor, setNewTagColor] = useState('#0f766e');
   const [calcTargetId, setCalcTargetId] = useState<string>('');
   const [calcResult, setCalcResult] = useState<string | null>(null);
-  
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const isDark = document.body.classList.contains('theme-dark');
-  
-  const cardClass = isDark ? 'glass-card-dark text-slate-200' : 'glass-card';
+
+  // Styles
+  const glassPanelClass = isDark ? 'bg-slate-900/95 border-slate-700 text-slate-200' : 'bg-white/95 border-slate-200 text-slate-800';
+  const sectionBg = isDark ? 'bg-slate-800/50' : 'bg-slate-50';
   const inputClass = isDark 
-    ? "w-full p-2 rounded-lg border border-slate-600 bg-slate-800/50 text-sm outline-none focus:ring-2 focus:ring-teal-500/50" 
-    : "w-full p-2 rounded-lg border border-slate-200 bg-white/50 text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500";
+    ? "w-full p-2.5 rounded-xl border border-slate-600 bg-slate-800 text-sm outline-none focus:ring-2 focus:ring-teal-500/50 transition-all" 
+    : "w-full p-2.5 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all";
+  
+  const labelClass = "text-[10px] font-bold opacity-50 uppercase tracking-wider mb-1.5 block";
 
   useEffect(() => {
     if (member) {
@@ -87,25 +91,10 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
       if (file) {
           const reader = new FileReader();
           reader.onloadend = () => {
-              const result = reader.result as string;
-              handleChange('imageUrl', result);
+              handleChange('imageUrl', reader.result as string);
           };
           reader.readAsDataURL(file);
       }
-  };
-
-  const handleAddEvent = () => {
-      if (!newEvent.title || !newEvent.date) return;
-      const currentEvents = formData.events || [];
-      const eventToAdd: LifeEvent = {
-          id: Date.now().toString(),
-          title: newEvent.title,
-          date: newEvent.date,
-          location: newEvent.location,
-          description: newEvent.description
-      };
-      handleChange('events', [...currentEvents, eventToAdd]);
-      setNewEvent({ title: '', date: '' });
   };
 
   const handleAddTag = () => {
@@ -120,13 +109,6 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
       setNewTag('');
   };
 
-  const handleCalcRelationship = () => {
-      if (calcTargetId) {
-          const res = calculateRelationship(member.id, calcTargetId);
-          setCalcResult(res);
-      }
-  };
-  
   const handleAddSpouseSubmit = () => {
       if (spouseType === 'new') {
           onAddSpouse(member.id);
@@ -141,458 +123,328 @@ const MemberPanel: React.FC<MemberPanelProps> = ({
     !member.connections?.some(c => c.targetId === m.id)
   );
 
-  const handlePrint = () => {
-    const content = `
-گزارش شجره‌نامه
-----------------
-نام: ${formData.name}
-تاریخ تولد: ${formData.birthDate || 'نامشخص'}
-تاریخ وفات: ${formData.deathDate || '---'}
-محل: ${formData.location || '---'}
-کد شناسایی: ${formData.code || '---'}
-    `.trim();
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
-  };
-  
   const copyCode = () => {
       if(formData.code) {
           navigator.clipboard.writeText(formData.code);
-          alert('کد کپی شد');
+          // Could add a toast notification here
       }
-  }
-  
-  const handleDeleteClick = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      onDeleteMember(member.id);
-      onClose();
   };
 
   return (
-    <div className={`w-full h-full flex flex-col overflow-hidden relative rounded-2xl ${isDark ? 'glass-panel-dark' : 'glass-panel'}`}>
+    <div className={`w-full h-full flex flex-col relative rounded-2xl overflow-hidden shadow-2xl backdrop-blur-md border ${glassPanelClass}`}>
       
-      {/* Hero Header */}
-      <div className={`relative h-48 shrink-0 overflow-hidden ${member.gender === 'male' ? 'bg-gradient-to-br from-slate-800 to-blue-900' : 'bg-gradient-to-br from-slate-800 to-pink-900'}`}>
-         {/* Background Pattern */}
-         <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] mix-blend-overlay"></div>
-         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+      {/* 1. COMPACT HEADER */}
+      <div className={`relative h-40 shrink-0 ${member.gender === 'male' ? 'bg-gradient-to-r from-cyan-600 to-blue-700' : 'bg-gradient-to-r from-pink-500 to-rose-600'}`}>
+         {/* Texture Overlay */}
+         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')]"></div>
          
-         {/* Close Button */}
-         <button onClick={onClose} className="absolute top-4 left-4 z-20 text-white/70 hover:text-white bg-black/20 hover:bg-red-500/80 p-2 rounded-full backdrop-blur-md transition-all">
-             <X size={20} />
-         </button>
-
-         {/* Actions */}
-         <div className="absolute top-4 right-4 z-20 flex gap-2">
-             <button onClick={() => setEditMode(!editMode)} className="text-white/80 hover:text-white bg-black/20 hover:bg-white/20 p-2 rounded-full backdrop-blur-md transition-all" title="ویرایش">
-                {editMode ? <Save size={18} onClick={handleSave}/> : <Settings size={18}/>}
+         {/* Toolbar */}
+         <div className="absolute top-0 w-full p-4 flex justify-between items-start z-20">
+             <button onClick={onClose} className="bg-black/20 hover:bg-black/40 text-white p-2 rounded-full backdrop-blur-sm transition-colors">
+                 <X size={20} />
              </button>
-             <button onClick={handlePrint} className="text-white/80 hover:text-white bg-black/20 hover:bg-white/20 p-2 rounded-full backdrop-blur-md transition-all" title="چاپ">
-                <Printer size={18}/>
-             </button>
-         </div>
-
-         {/* Profile Content */}
-         <div className="absolute bottom-0 left-0 w-full p-6 flex items-end gap-6 z-10">
-             <div className="relative group shrink-0">
-                <div className={`w-32 h-32 rounded-2xl border-4 ${isDark ? 'border-slate-800' : 'border-white/20'} shadow-2xl overflow-hidden bg-white/10 backdrop-blur-sm`}>
-                    {formData.imageUrl ? (
-                        <img src={formData.imageUrl} alt={formData.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-white/10 text-white/50">
-                            <User size={56} />
-                        </div>
-                    )}
-                </div>
-                {editMode && (
-                    <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-2 left-2 p-2 bg-teal-600 text-white rounded-full hover:bg-teal-500 shadow-lg backdrop-blur-sm transition-transform hover:scale-110">
-                        <Camera size={16} />
-                    </button>
-                )}
-                <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => handleUploadImage(e)} accept="image/*" />
-             </div>
-             
-             <div className="flex-1 pb-2">
-                  <div className="flex items-center gap-3 mb-1">
-                      {editMode ? (
-                          <input 
-                            className="text-3xl font-bold bg-transparent border-b border-white/30 text-white w-full outline-none focus:border-teal-400"
-                            value={formData.name}
-                            onChange={(e) => handleChange('name', e.target.value)}
-                          />
-                      ) : (
-                          <h2 className="text-3xl font-black text-white drop-shadow-md">{formData.name}</h2>
-                      )}
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-2 items-center text-white/80 text-sm">
-                      <span className="bg-black/30 px-2 py-0.5 rounded backdrop-blur-md flex items-center gap-1">
-                          <Calendar size={12}/> {formData.birthDate || '؟'}
-                      </span>
-                      {formData.occupation && (
-                          <span className="bg-black/30 px-2 py-0.5 rounded backdrop-blur-md flex items-center gap-1">
-                              <Briefcase size={12}/> {formData.occupation}
-                          </span>
-                      )}
-                      <div onClick={copyCode} className="bg-white/10 px-2 py-0.5 rounded backdrop-blur-md flex items-center gap-1 cursor-pointer hover:bg-white/20 font-mono" title="کپی کد">
-                          <Copy size={10}/> {formData.code}
-                      </div>
-                  </div>
+             <div className="flex gap-2">
+                 <button onClick={() => setEditMode(!editMode)} className={`p-2 rounded-full backdrop-blur-sm transition-colors ${editMode ? 'bg-white text-teal-600 shadow-lg' : 'bg-black/20 text-white hover:bg-white/20'}`}>
+                    {editMode ? <Save size={18} onClick={handleSave}/> : <Settings size={18}/>}
+                 </button>
              </div>
          </div>
       </div>
 
-      {/* Tabs */}
-      <div className={`flex border-b overflow-x-auto no-scrollbar px-4 pt-2 sticky top-0 z-30 ${isDark ? 'bg-slate-900/90 border-slate-700' : 'bg-white/90 border-slate-200'}`}>
+      {/* 2. PROFILE SECTION (Overlapping) */}
+      <div className="px-8 -mt-16 relative z-10 flex flex-col md:flex-row items-end md:items-end gap-6 pb-6 border-b border-dashed border-slate-300 dark:border-slate-700">
+          {/* Avatar */}
+          <div className="relative group shrink-0">
+             <div className={`w-32 h-32 rounded-full border-[6px] ${isDark ? 'border-slate-900 bg-slate-800' : 'border-white bg-slate-100'} shadow-xl overflow-hidden relative`}>
+                 {formData.imageUrl ? (
+                     <img src={formData.imageUrl} alt={formData.name} className="w-full h-full object-cover" />
+                 ) : (
+                     <div className="w-full h-full flex items-center justify-center opacity-30">
+                         <User size={64} />
+                     </div>
+                 )}
+                 {editMode && (
+                    <div 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity"
+                    >
+                        <Camera className="text-white" />
+                    </div>
+                 )}
+             </div>
+             <input type="file" ref={fileInputRef} className="hidden" onChange={handleUploadImage} accept="image/*" />
+          </div>
+
+          {/* Name & Basic Info */}
+          <div className="flex-1 pb-1 w-full text-center md:text-right">
+              {editMode ? (
+                  <input 
+                    className="text-3xl font-black bg-transparent border-b-2 border-teal-500 w-full text-center md:text-right outline-none mb-2"
+                    value={formData.name}
+                    onChange={(e) => handleChange('name', e.target.value)}
+                    placeholder="نام و نام خانوادگی"
+                  />
+              ) : (
+                  <h1 className="text-3xl font-black mb-2">{formData.name}</h1>
+              )}
+              
+              <div className="flex flex-wrap gap-3 justify-center md:justify-start items-center opacity-70 text-sm">
+                  <span className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
+                      {formData.gender === 'male' ? <span className="text-blue-500">مرد</span> : <span className="text-pink-500">زن</span>}
+                  </span>
+                  {formData.occupation && (
+                      <span className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
+                          <Briefcase size={14}/> {formData.occupation}
+                      </span>
+                  )}
+                  <button onClick={copyCode} className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full hover:bg-teal-50 dark:hover:bg-teal-900/30 transition-colors font-mono" title="کپی کد">
+                      <span className="opacity-50">#</span>{formData.code} <Copy size={12}/>
+                  </button>
+              </div>
+          </div>
+      </div>
+
+      {/* 3. NAVIGATION (Pills) */}
+      <div className="px-6 py-4 flex gap-2 overflow-x-auto no-scrollbar shrink-0">
           {[
-              {id: 'info', label: 'اطلاعات پایه', icon: User},
-              {id: 'events', label: 'تایم‌لاین', icon: Route},
-              {id: 'relations', label: 'روابط', icon: Network},
+              {id: 'info', label: 'مشخصات', icon: User},
+              {id: 'relations', label: 'روابط خانوادگی', icon: Network},
               {id: 'settings', label: 'تنظیمات', icon: Settings},
           ].map(tab => (
               <button 
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as Tab)}
-                className={`relative flex items-center gap-2 px-5 py-4 text-sm font-bold transition-all whitespace-nowrap outline-none ${
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold transition-all whitespace-nowrap ${
                     activeTab === tab.id 
-                    ? (isDark ? 'text-teal-400' : 'text-teal-700') 
-                    : (isDark ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-700')
+                    ? 'bg-teal-500 text-white shadow-md shadow-teal-500/20' 
+                    : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'
                 }`}
               >
-                 <tab.icon size={18} className={activeTab === tab.id ? "scale-110" : ""} /> {tab.label}
-                 {activeTab === tab.id && (
-                     <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-teal-400 to-teal-600 rounded-t-full"></span>
-                 )}
+                 <tab.icon size={16} /> {tab.label}
               </button>
           ))}
       </div>
 
-      {/* Content Scroll Area */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-transparent">
+      {/* 4. CONTENT AREA */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pt-0">
           
-          {/* INFO TAB */}
+          {/* --- INFO TAB --- */}
           {activeTab === 'info' && (
-              <div className="space-y-6 animate-enter">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className={`p-4 rounded-2xl ${cardClass}`}>
-                          <label className="text-xs font-bold opacity-50 block mb-2 uppercase tracking-wider">جنسیت</label>
-                          {editMode ? (
-                              <select 
-                                className={`${inputClass} cursor-pointer`}
-                                value={formData.gender}
-                                onChange={(e) => handleChange('gender', e.target.value)}
-                              >
-                                  <option value="male">مرد</option>
-                                  <option value="female">زن</option>
-                              </select>
-                          ) : (
-                              <div className="font-medium flex items-center gap-2">
-                                  {formData.gender === 'male' ? <span className="text-blue-500">♂ مرد</span> : <span className="text-pink-500">♀ زن</span>}
-                              </div>
-                          )}
-                      </div>
+              <div className="space-y-6 animate-slide-up max-w-3xl mx-auto" style={{animationDelay: '0.1s'}}>
+                  
+                  {/* Vital Stats Section */}
+                  <div className={`p-6 rounded-3xl ${sectionBg}`}>
+                      <h3 className="text-sm font-bold opacity-70 mb-5 flex items-center gap-2">
+                          <div className="w-1 h-4 bg-teal-500 rounded-full"></div>
+                          اطلاعات پایه
+                      </h3>
                       
-                      <div className={`p-4 rounded-2xl ${cardClass}`}>
-                          <label className="text-xs font-bold opacity-50 block mb-2 uppercase tracking-wider">شغل / حرفه</label>
-                          {editMode ? (
-                              <input className={inputClass} value={formData.occupation || ''} onChange={(e) => handleChange('occupation', e.target.value)} />
-                          ) : (
-                              <div className="font-medium">{formData.occupation || '-'}</div>
-                          )}
-                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                              <label className={labelClass}>تاریخ تولد</label>
+                              {editMode ? (
+                                  <input dir="ltr" className={`${inputClass} font-mono text-center`} value={formData.birthDate || ''} onChange={(e) => handleChange('birthDate', e.target.value)} placeholder="1300/01/01" />
+                              ) : (
+                                  <div className="text-lg font-bold flex items-center gap-2">
+                                      <Calendar size={18} className="text-teal-500 opacity-70"/> 
+                                      {formData.birthDate || 'نامشخص'}
+                                  </div>
+                              )}
+                          </div>
+                          
+                          <div>
+                              <label className={labelClass}>محل تولد / زندگی</label>
+                              {editMode ? (
+                                  <input className={inputClass} value={formData.location || ''} onChange={(e) => handleChange('location', e.target.value)} placeholder="شهر، کشور" />
+                              ) : (
+                                  <div className="text-lg font-bold flex items-center gap-2">
+                                      <MapPin size={18} className="text-teal-500 opacity-70"/> 
+                                      {formData.location || 'نامشخص'}
+                                  </div>
+                              )}
+                          </div>
 
-                      <div className={`p-4 rounded-2xl ${cardClass}`}>
-                          <label className="text-xs font-bold opacity-50 block mb-2 uppercase tracking-wider">تاریخ تولد</label>
-                          {editMode ? (
-                              <input dir="ltr" className={`${inputClass} text-left font-mono`} value={formData.birthDate || ''} onChange={(e) => handleChange('birthDate', e.target.value)} placeholder="YYYY/MM/DD" />
-                          ) : (
-                              <div className="font-medium dir-ltr text-right font-mono">{formData.birthDate || '-'}</div>
-                          )}
-                      </div>
+                          <div>
+                              <label className={labelClass}>تاریخ وفات</label>
+                              {editMode ? (
+                                  <input dir="ltr" className={`${inputClass} font-mono text-center`} value={formData.deathDate || ''} onChange={(e) => handleChange('deathDate', e.target.value)} placeholder="-" />
+                              ) : (
+                                  <div className={`text-lg font-bold flex items-center gap-2 ${formData.deathDate ? 'text-slate-700 dark:text-slate-300' : 'opacity-40'}`}>
+                                      <span className="text-xl leading-none">✝</span>
+                                      {formData.deathDate || 'در قید حیات'}
+                                  </div>
+                              )}
+                          </div>
 
-                      <div className={`p-4 rounded-2xl ${cardClass}`}>
-                          <label className="text-xs font-bold opacity-50 block mb-2 uppercase tracking-wider">تاریخ وفات</label>
-                          {editMode ? (
-                              <input dir="ltr" className={`${inputClass} text-left font-mono`} value={formData.deathDate || ''} onChange={(e) => handleChange('deathDate', e.target.value)} placeholder="-" />
-                          ) : (
-                              <div className="font-medium dir-ltr text-right font-mono">{formData.deathDate || '-'}</div>
-                          )}
-                      </div>
-
-                      <div className={`p-4 rounded-2xl ${cardClass} md:col-span-2`}>
-                          <label className="text-xs font-bold opacity-50 block mb-2 uppercase tracking-wider flex items-center gap-1"><MapPin size={12}/> محل زندگی/تولد</label>
-                          {editMode ? (
-                              <input className={inputClass} value={formData.location || ''} onChange={(e) => handleChange('location', e.target.value)} placeholder="تهران، ایران" />
-                          ) : (
-                              <div className="font-medium">{formData.location || '-'}</div>
+                          <div>
+                              <label className={labelClass}>شغل</label>
+                              {editMode ? (
+                                  <input className={inputClass} value={formData.occupation || ''} onChange={(e) => handleChange('occupation', e.target.value)} />
+                              ) : (
+                                  <div className="text-lg font-bold flex items-center gap-2">
+                                      <Briefcase size={18} className="text-teal-500 opacity-70"/> 
+                                      {formData.occupation || 'ثبت نشده'}
+                                  </div>
+                              )}
+                          </div>
+                          
+                          {editMode && (
+                             <div>
+                                <label className={labelClass}>جنسیت</label>
+                                <select className={inputClass} value={formData.gender} onChange={(e) => handleChange('gender', e.target.value)}>
+                                    <option value="male">مرد</option>
+                                    <option value="female">زن</option>
+                                </select>
+                             </div>
                           )}
                       </div>
                   </div>
-                  
-                  {editMode && (
-                      <div className={`p-4 rounded-2xl ${isDark ? 'bg-slate-800/50 border border-slate-700' : 'bg-slate-50/80 border border-slate-100'}`}>
-                          <label className="text-xs font-bold opacity-60 mb-2 block uppercase tracking-wider">برچسب‌های رنگی</label>
-                          <div className="flex gap-2">
+
+                  {/* Tags Section */}
+                  <div className={`p-6 rounded-3xl ${sectionBg}`}>
+                      <h3 className="text-sm font-bold opacity-70 mb-5 flex items-center gap-2">
+                          <div className="w-1 h-4 bg-purple-500 rounded-full"></div>
+                          برچسب‌ها و ویژگی‌ها
+                      </h3>
+                      
+                      {editMode && (
+                          <div className="flex gap-2 mb-4">
                               <input 
-                                value={newTag}
-                                onChange={(e) => setNewTag(e.target.value)}
-                                className={`${inputClass} flex-1`}
-                                placeholder="عنوان برچسب (مثلاً: شاعر)"
+                                value={newTag} onChange={(e) => setNewTag(e.target.value)}
+                                className={inputClass} placeholder="برچسب جدید..."
                               />
                               <input 
-                                type="color" 
-                                value={newTagColor}
-                                onChange={(e) => setNewTagColor(e.target.value)}
-                                className="w-10 h-10 p-1 rounded-lg border cursor-pointer bg-transparent"
+                                type="color" value={newTagColor} onChange={(e) => setNewTagColor(e.target.value)}
+                                className="h-full w-12 p-1 rounded-xl border bg-transparent cursor-pointer"
                               />
-                              <button onClick={handleAddTag} className="bg-teal-600 text-white p-2 rounded-lg hover:bg-teal-500 shadow-lg"><Plus size={18}/></button>
+                              <button onClick={handleAddTag} className="bg-teal-500 text-white p-3 rounded-xl hover:bg-teal-600"><Plus size={20}/></button>
                           </div>
-                          <div className="flex flex-wrap gap-2 mt-3">
-                              {formData.tags?.map(tag => (
-                                 <span key={tag.id} style={{backgroundColor: tag.color + '20', color: tag.color, borderColor: tag.color}} className="border text-xs px-2 py-1 rounded-full flex items-center gap-1 font-bold">
-                                    {tag.label} 
-                                    <X size={10} className="cursor-pointer" onClick={() => handleChange('tags', formData.tags?.filter(t => t.id !== tag.id))} />
-                                 </span>
-                              ))}
-                          </div>
-                      </div>
-                  )}
-                  {!editMode && formData.tags && formData.tags.length > 0 && (
+                      )}
+
                       <div className="flex flex-wrap gap-2">
-                          {formData.tags.map(tag => (
-                             <span key={tag.id} style={{backgroundColor: tag.color}} className="text-white text-xs px-3 py-1 rounded-full shadow-sm">
+                          {formData.tags?.map(tag => (
+                             <span key={tag.id} style={{backgroundColor: tag.color + '15', color: tag.color, borderColor: tag.color + '40'}} className="border px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2">
                                 {tag.label}
+                                {editMode && <button onClick={() => handleChange('tags', formData.tags?.filter(t => t.id !== tag.id))}><X size={12}/></button>}
                              </span>
                           ))}
+                          {(!formData.tags || formData.tags.length === 0) && <span className="opacity-40 text-sm italic">بدون برچسب</span>}
                       </div>
-                  )}
+                  </div>
               </div>
           )}
 
-          {/* EVENTS TAB */}
-          {activeTab === 'events' && (
-               <div className="space-y-6 animate-enter px-2">
-                   {editMode && (
-                       <div className={`p-5 rounded-2xl border space-y-4 mb-8 ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50/80 border-slate-200'}`}>
-                           <h4 className="text-xs font-bold opacity-60 uppercase tracking-wider">افزودن رویداد جدید</h4>
-                           <div className="grid grid-cols-2 gap-3">
-                               <input placeholder="عنوان رویداد" className={inputClass} value={newEvent.title} onChange={e => setNewEvent({...newEvent, title: e.target.value})} />
-                               <input dir="ltr" placeholder="تاریخ (YYYY)" className={`${inputClass} text-left`} value={newEvent.date} onChange={e => setNewEvent({...newEvent, date: e.target.value})} />
-                           </div>
-                           <input placeholder="مکان یا توضیحات کوتاه..." className={inputClass} value={newEvent.location || ''} onChange={e => setNewEvent({...newEvent, location: e.target.value})} />
-                           <button onClick={handleAddEvent} className="w-full py-2 bg-teal-600 text-white rounded-xl text-sm font-bold shadow hover:bg-teal-500 transition-all">ثبت رویداد</button>
-                       </div>
-                   )}
-
-                   <div className={`relative border-r-2 mr-4 space-y-10 pb-4 ${isDark ? 'border-slate-700' : 'border-slate-300'}`}>
-                       {/* Birth */}
-                       <div className="relative pr-8">
-                           <div className="absolute -right-[9px] top-1.5 w-4 h-4 rounded-full bg-teal-500 ring-4 ring-white/20 shadow-md z-10"></div>
-                           <span className="text-sm font-mono opacity-50 block mb-1 font-bold">{formData.birthDate || '---'}</span>
-                           <div className="font-bold text-lg">تولد</div>
-                           <div className="text-sm opacity-60 mt-1">{formData.location}</div>
-                       </div>
-                       
-                       {/* Dynamic Events */}
-                       {formData.events?.sort((a,b) => a.date.localeCompare(b.date)).map((event) => (
-                           <div key={event.id} className="relative pr-8 group hover:translate-x-1 transition-transform cursor-default">
-                               <div className="absolute -right-[9px] top-1.5 w-4 h-4 rounded-full bg-amber-400 ring-4 ring-white/20 shadow-md z-10 group-hover:scale-125 transition-transform"></div>
-                               <span className="text-sm font-mono opacity-50 block mb-1 font-bold">{event.date}</span>
-                               <div className="font-bold text-lg">{event.title}</div>
-                               <div className="text-sm opacity-60 mt-1">{event.location}</div>
-                               {editMode && <button onClick={() => handleChange('events', formData.events?.filter(e => e.id !== event.id))} className="text-red-400 text-xs mt-2 hover:underline opacity-0 group-hover:opacity-100 transition-opacity">حذف</button>}
-                           </div>
-                       ))}
-
-                       {/* Death */}
-                       {formData.deathDate && (
-                           <div className="relative pr-8">
-                               <div className="absolute -right-[9px] top-1.5 w-4 h-4 rounded-full bg-slate-500 ring-4 ring-white/20 shadow-md z-10"></div>
-                               <span className="text-sm font-mono opacity-50 block mb-1 font-bold">{formData.deathDate}</span>
-                               <div className="font-bold text-lg text-slate-500">وفات</div>
-                           </div>
-                       )}
-                   </div>
-               </div>
-          )}
-
-          {/* RELATIONS TAB */}
+          {/* --- RELATIONS TAB --- */}
           {activeTab === 'relations' && (
-            <div className="space-y-6 animate-enter">
-                
-                <div className={`p-5 rounded-2xl ${isDark ? 'bg-slate-800/30 border border-slate-700' : 'bg-slate-50 border border-slate-200'}`}>
-                    <h4 className="text-xs font-bold opacity-60 mb-4 uppercase tracking-wider flex justify-between">
-                         اقدامات سریع
-                         <span className="text-[10px] opacity-70">میانبرهای صفحه کلید فعال است</span>
-                    </h4>
-                    
-                    <div className="grid grid-cols-2 gap-3">
-                         {/* Parent Button */}
-                         <button 
-                             onClick={onAddParent}
-                             className={`relative p-4 rounded-2xl flex flex-col items-center gap-2 border transition-all hover:shadow-md group ${isDark ? 'bg-slate-800 border-slate-700 hover:border-indigo-500' : 'bg-white border-slate-200 hover:border-indigo-500'}`}
-                             title="میانبر: P"
-                         >
-                            <span className="absolute top-2 right-2 text-[10px] font-mono opacity-40 border px-1 rounded">P</span>
-                            <div className="bg-indigo-100/20 p-2.5 rounded-full text-indigo-500 group-hover:scale-110 transition-transform">
-                                <ArrowUp size={24}/>
-                            </div>
-                            <span className="text-sm font-bold">افزودن والد</span>
-                         </button>
+              <div className="space-y-8 animate-slide-up max-w-3xl mx-auto" style={{animationDelay: '0.1s'}}>
+                  
+                  {/* Quick Actions Grid (Clean Version) */}
+                  <div>
+                      <h3 className={labelClass}>افزودن و مدیریت روابط</h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2">
+                          <button onClick={onAddParent} className="group flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-all">
+                              <ArrowUp size={24} className="group-hover:-translate-y-1 transition-transform"/>
+                              <span className="text-xs font-bold">والد [P]</span>
+                          </button>
+                          <button onClick={() => setIsAddSpouseMode(!isAddSpouseMode)} className="group flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400 border border-pink-100 dark:border-pink-800 hover:bg-pink-100 dark:hover:bg-pink-900/40 transition-all">
+                              <Heart size={24} className="group-hover:scale-110 transition-transform"/>
+                              <span className="text-xs font-bold">همسر [M]</span>
+                          </button>
+                          <button onClick={() => onAddSibling(member.id)} className="group flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-all">
+                              <GitBranch size={24} className="group-hover:rotate-12 transition-transform"/>
+                              <span className="text-xs font-bold">هم‌سطح [S]</span>
+                          </button>
+                          <button onClick={() => onAddChild(member.id)} className="group flex flex-col items-center justify-center gap-2 p-4 rounded-2xl bg-teal-50 dark:bg-teal-900/20 text-teal-600 dark:text-teal-400 border border-teal-100 dark:border-teal-800 hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-all">
+                              <Baby size={24} className="group-hover:translate-y-1 transition-transform"/>
+                              <span className="text-xs font-bold">فرزند [C]</span>
+                          </button>
+                      </div>
+                  </div>
 
-                         {/* Spouse Button */}
-                         <button 
-                             onClick={() => setIsAddSpouseMode(!isAddSpouseMode)} 
-                             className={`relative p-4 rounded-2xl flex flex-col items-center gap-2 border transition-all hover:shadow-md group ${isDark ? 'bg-slate-800 border-slate-700 hover:border-pink-500' : 'bg-white border-slate-200 hover:border-pink-500'}`}
-                             title="میانبر: M"
-                         >
-                            <span className="absolute top-2 right-2 text-[10px] font-mono opacity-40 border px-1 rounded">M</span>
-                            <div className="bg-pink-100/20 p-2.5 rounded-full text-pink-500 group-hover:scale-110 transition-transform">
-                                <Heart size={24}/>
-                            </div>
-                            <span className="text-sm font-bold">مدیریت همسر</span>
-                         </button>
-
-                         {/* Sibling Button */}
-                         <button 
-                             onClick={() => onAddSibling(member.id)} 
-                             className={`relative p-4 rounded-2xl flex flex-col items-center gap-2 border transition-all hover:shadow-md group ${isDark ? 'bg-slate-800 border-slate-700 hover:border-blue-500' : 'bg-white border-slate-200 hover:border-blue-500'}`}
-                             title="میانبر: S"
-                         >
-                            <span className="absolute top-2 right-2 text-[10px] font-mono opacity-40 border px-1 rounded">S</span>
-                            <div className="bg-blue-100/20 p-2.5 rounded-full text-blue-600 group-hover:scale-110 transition-transform">
-                                <GitBranch size={24}/>
-                            </div>
-                            <span className="text-sm font-bold">افزودن هم‌سطح</span>
-                         </button>
-                         
-                         {/* Child Button */}
-                         <button 
-                             onClick={() => onAddChild(member.id)} 
-                             className={`relative p-4 rounded-2xl flex flex-col items-center gap-2 border transition-all hover:shadow-md group ${isDark ? 'bg-slate-800 border-slate-700 hover:border-teal-500' : 'bg-white border-slate-200 hover:border-teal-500'}`}
-                             title="میانبر: C"
-                         >
-                            <span className="absolute top-2 right-2 text-[10px] font-mono opacity-40 border px-1 rounded">C</span>
-                            <div className="bg-teal-100/20 p-2.5 rounded-full text-teal-600 group-hover:scale-110 transition-transform">
-                                <ArrowDown size={24}/>
-                            </div>
-                            <span className="text-sm font-bold">افزودن فرزند</span>
-                         </button>
-                    </div>
-                </div>
-
-                {isAddSpouseMode && (
-                    <div className="p-6 rounded-2xl border border-pink-200/50 bg-pink-50/50 backdrop-blur-sm animate-fade-in-scale">
-                        <h4 className="text-sm font-bold text-pink-600 mb-4 flex items-center gap-2"><Heart size={18}/> ثبت ازدواج جدید</h4>
-                        
-                        <div className="flex gap-2 mb-4 bg-white/50 p-1.5 rounded-xl border border-pink-100">
-                            <button onClick={() => setSpouseType('new')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${spouseType === 'new' ? 'bg-pink-500 text-white shadow-md' : 'text-slate-500 hover:bg-pink-100'}`}>شخص جدید</button>
-                            <button onClick={() => setSpouseType('existing')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${spouseType === 'existing' ? 'bg-pink-500 text-white shadow-md' : 'text-slate-500 hover:bg-pink-100'}`}>ازدواج فامیلی</button>
-                        </div>
-
-                        {spouseType === 'existing' && (
-                             <select 
-                                className="w-full p-3 rounded-xl border border-pink-200 text-sm mb-4 bg-white/80 outline-none"
-                                value={spouseTargetId}
-                                onChange={(e) => setSpouseTargetId(e.target.value)}
-                             >
-                                 <option value="">انتخاب همسر از لیست اعضا...</option>
-                                 {eligibleSpouses.map(m => (
-                                     <option key={m.id} value={m.id}>{m.name} ({m.birthDate || '?'})</option>
-                                 ))}
+                  {/* Add Spouse Form */}
+                  {isAddSpouseMode && (
+                      <div className="bg-pink-50 dark:bg-pink-900/10 border border-pink-100 dark:border-pink-800 p-5 rounded-2xl animate-fade-in-scale">
+                          <h4 className="text-sm font-bold text-pink-600 mb-3">ثبت ازدواج</h4>
+                          <div className="flex gap-2 mb-3">
+                              <button onClick={() => setSpouseType('new')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${spouseType === 'new' ? 'bg-pink-500 text-white' : 'bg-white dark:bg-slate-800'}`}>شخص جدید</button>
+                              <button onClick={() => setSpouseType('existing')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-colors ${spouseType === 'existing' ? 'bg-pink-500 text-white' : 'bg-white dark:bg-slate-800'}`}>انتخاب از لیست</button>
+                          </div>
+                          {spouseType === 'existing' && (
+                             <select className={inputClass} value={spouseTargetId} onChange={(e) => setSpouseTargetId(e.target.value)}>
+                                 <option value="">انتخاب همسر...</option>
+                                 {eligibleSpouses.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                              </select>
-                        )}
+                          )}
+                          <button onClick={handleAddSpouseSubmit} className="w-full mt-2 py-2 bg-pink-500 text-white rounded-xl text-sm font-bold">ثبت نهایی</button>
+                      </div>
+                  )}
 
-                        <button onClick={handleAddSpouseSubmit} className="w-full py-3 bg-pink-600 text-white rounded-xl font-bold shadow-lg shadow-pink-300/50 hover:bg-pink-700 transition-all hover:scale-[1.01]">
-                            تایید و ثبت همسر
-                        </button>
-                    </div>
-                )}
+                  {/* Manual Connections List */}
+                  <div className={`rounded-3xl border p-6 ${isDark ? 'border-slate-700 bg-slate-800/30' : 'border-slate-200 bg-slate-50'}`}>
+                      <h3 className="text-sm font-bold opacity-70 mb-4 flex items-center justify-between">
+                          <span>ارتباطات غیر درختی (لینک‌ها)</span>
+                          <span className="text-[10px] bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded-full">{member.connections?.length || 0}</span>
+                      </h3>
+                      
+                      <div className="space-y-2">
+                          {member.connections?.map((conn, idx) => {
+                              const target = allMembers.find(m => m.id === conn.targetId);
+                              return (
+                                  <div key={idx} className="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
+                                      <div className="flex items-center gap-3">
+                                          <Link size={16} className="text-slate-400"/>
+                                          <div>
+                                              <span className="font-bold text-sm block">{target?.name}</span>
+                                              <span className="text-xs opacity-50">{conn.label}</span>
+                                          </div>
+                                      </div>
+                                      <button onClick={() => onRemoveConnection(member.id, conn.targetId)} className="text-red-400 hover:text-red-600 p-2"><Trash2 size={16}/></button>
+                                  </div>
+                              )
+                          })}
+                      </div>
 
-                <div className={`${cardClass} p-6 rounded-2xl`}>
-                    <h4 className="text-xs font-bold opacity-50 mb-4 uppercase tracking-wider">ارتباطات ویژه (غیر درختی)</h4>
-                    <div className="space-y-3 mb-5">
-                        {member.connections?.map((conn, idx) => {
-                             const target = allMembers.find(m => m.id === conn.targetId);
-                             return (
-                                 <div key={idx} className={`flex justify-between items-center p-3 rounded-xl border text-sm ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white/50 border-slate-200'}`}>
-                                     <div className="flex items-center gap-3">
-                                         <span className="w-2 h-2 bg-amber-400 rounded-full shadow-sm shadow-amber-400/50"></span>
-                                         <span className="opacity-70">{conn.label}: </span>
-                                         <span className="font-bold text-base">{target?.name || 'ناشناس'}</span>
-                                     </div>
-                                     <button onClick={() => onRemoveConnection(member.id, conn.targetId)} className="text-red-400 hover:bg-red-100/20 p-2 rounded-lg transition-colors"><Trash2 size={16}/></button>
-                                 </div>
-                             );
-                        })}
-                        {(!member.connections || member.connections.length === 0) && <p className="text-sm opacity-40 text-center italic py-4">هیچ ارتباط ویژه‌ای ثبت نشده است.</p>}
-                    </div>
-                    
-                    <div className="flex gap-2">
-                        <select 
-                          className={`flex-1 p-3 rounded-xl border text-sm outline-none ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white/80 border-slate-200'}`}
-                          value={newConnectionTarget}
-                          onChange={(e) => setNewConnectionTarget(e.target.value)}
-                        >
-                             <option value="">انتخاب فرد...</option>
-                             {allMembers.filter(m => m.id !== member.id).map(m => (
-                                 <option key={m.id} value={m.id}>{m.name}</option>
-                             ))}
-                        </select>
-                        <input 
-                           className={`w-32 p-3 rounded-xl border text-sm outline-none ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white/80 border-slate-200'}`}
-                           placeholder="عنوان رابطه"
-                           value={newConnectionLabel}
-                           onChange={(e) => setNewConnectionLabel(e.target.value)}
-                        />
-                        <button 
-                           disabled={!newConnectionTarget}
-                           onClick={() => { if(newConnectionTarget) onAddConnection(member.id, newConnectionTarget, newConnectionLabel); }} 
-                           className="bg-amber-500 text-white px-4 rounded-xl shadow-lg shadow-amber-500/30 disabled:opacity-50 hover:bg-amber-600 transition-colors"
-                        >
-                            <Plus size={20}/>
-                        </button>
-                    </div>
-                </div>
-                
-                <div className="p-6 rounded-2xl border border-teal-200/50 bg-teal-50/30 backdrop-blur-sm">
-                    <h4 className="text-xs font-bold text-teal-700 mb-4 flex items-center gap-2 uppercase tracking-wider"><Calculator size={16}/> ماشین حساب پیشرفته نسبت‌ها</h4>
-                    <div className="flex gap-2 mb-4">
-                        <select 
-                          className="w-full p-3 rounded-xl border border-teal-200 text-sm bg-white/80 outline-none focus:ring-1 focus:ring-teal-500"
-                          value={calcTargetId}
-                          onChange={(e) => { setCalcTargetId(e.target.value); setCalcResult(null); }}
-                        >
-                             <option value="">مقایسه با...</option>
-                             {allMembers.filter(m => m.id !== member.id).map(m => (
-                                 <option key={m.id} value={m.id}>{m.name}</option>
-                             ))}
-                        </select>
-                        <button onClick={handleCalcRelationship} disabled={!calcTargetId} className="bg-teal-600 text-white px-6 rounded-xl font-bold shadow-lg shadow-teal-500/20 disabled:opacity-50 hover:bg-teal-700 transition-all">
-                            محاسبه
-                        </button>
-                    </div>
-                    {calcResult && (
-                        <div className="bg-white/90 p-4 rounded-xl border border-teal-200 text-center text-teal-800 font-bold text-lg animate-fade-in-scale shadow-sm flex items-center justify-center gap-2">
-                           {calcResult}
-                        </div>
-                    )}
-                </div>
-            </div>
+                      <div className="mt-4 pt-4 border-t border-dashed border-slate-300 dark:border-slate-700">
+                           <div className="flex gap-2">
+                               <select className={inputClass} value={newConnectionTarget} onChange={(e) => setNewConnectionTarget(e.target.value)}>
+                                   <option value="">فرد مرتبط...</option>
+                                   {allMembers.filter(m => m.id !== member.id).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                               </select>
+                               <input className={inputClass} placeholder="عنوان (مثلاً: دوست)" value={newConnectionLabel} onChange={(e) => setNewConnectionLabel(e.target.value)} />
+                               <button onClick={() => {if(newConnectionTarget) onAddConnection(member.id, newConnectionTarget, newConnectionLabel)}} className="bg-slate-800 text-white px-4 rounded-xl hover:bg-black"><Plus size={18}/></button>
+                           </div>
+                      </div>
+                  </div>
+                  
+                  {/* Relationship Calculator */}
+                  <div className={`p-6 rounded-3xl ${sectionBg}`}>
+                      <h3 className={labelClass}>محاسبه نسبت فامیلی</h3>
+                      <div className="flex gap-2 mt-2">
+                          <select className={inputClass} value={calcTargetId} onChange={(e) => { setCalcTargetId(e.target.value); setCalcResult(null); }}>
+                              <option value="">مقایسه با...</option>
+                              {allMembers.filter(m => m.id !== member.id).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                          </select>
+                          <button onClick={() => calcTargetId && setCalcResult(calculateRelationship(member.id, calcTargetId))} className="bg-teal-500 text-white px-5 rounded-xl font-bold text-sm hover:bg-teal-600 whitespace-nowrap"><Calculator size={18}/></button>
+                      </div>
+                      {calcResult && <div className="mt-3 p-3 bg-teal-50 dark:bg-teal-900/30 text-teal-800 dark:text-teal-200 rounded-xl text-center font-bold text-sm border border-teal-200 dark:border-teal-800">{calcResult}</div>}
+                  </div>
+              </div>
           )}
-          
-          {/* SETTINGS TAB */}
+
+          {/* --- SETTINGS TAB --- */}
           {activeTab === 'settings' && (
-               <div className="space-y-6 animate-enter">
-                    <div className={`${cardClass} p-6 rounded-2xl border-red-100`}>
-                        <h4 className="text-xs font-bold opacity-50 mb-4 uppercase tracking-wider text-red-400">منطقه خطر</h4>
-                        <button onClick={handleDeleteClick} className="w-full py-4 bg-red-50/50 text-red-600 border border-red-100 rounded-2xl text-sm font-bold hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2 shadow-sm">
-                           <Trash2 size={18}/> حذف دائمی عضو و زیرشاخه‌ها
-                        </button>
-                    </div>
-               </div>
+              <div className="max-w-xl mx-auto pt-10 animate-slide-up" style={{animationDelay: '0.1s'}}>
+                   <div className="bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 p-6 rounded-3xl text-center">
+                       <Trash2 size={32} className="text-red-500 mx-auto mb-4 opacity-50"/>
+                       <h3 className="text-red-600 font-bold mb-2">منطقه خطر</h3>
+                       <p className="text-xs text-red-400 mb-6 px-4">با حذف این عضو، تمام زیرشاخه‌ها و اطلاعات مربوطه به صورت دائمی از سیستم حذف خواهند شد.</p>
+                       <button onClick={(e) => { onDeleteMember(member.id); onClose(); }} className="bg-red-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-red-500/30 hover:bg-red-600 transition-all w-full">
+                           تایید و حذف عضو
+                       </button>
+                   </div>
+              </div>
           )}
+
       </div>
     </div>
   );
