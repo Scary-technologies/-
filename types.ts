@@ -65,4 +65,13 @@ export interface AIRequestConfig {
   extraContext?: string;
 }
 
+export interface TreeSettings {
+  showSpouseConnections: boolean;
+  showParentChildConnections: boolean;
+  showLabels: boolean;
+  showDates: boolean;
+  showAvatars: boolean;
+  showGenderIcons: boolean;
+}
+
 export type AppTheme = 'modern' | 'dark';

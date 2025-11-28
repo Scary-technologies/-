@@ -7,7 +7,7 @@ import {
   tree as d3Tree, 
   hierarchy 
 } from 'd3';
-import { FamilyMember, AppTheme } from '../types';
+import { FamilyMember, AppTheme, TreeSettings } from '../types';
 import { Maximize, ZoomIn, ZoomOut, ArrowDown, ArrowRight, Heart, User, Plus, Trash2, GitBranch, GitMerge, XCircle } from 'lucide-react';
 
 // Define loose types for d3 structures to avoid compilation errors if @types/d3 is missing or incompatible
@@ -32,6 +32,7 @@ interface FamilyTreeProps {
   onAddSpouse?: (memberId: string) => void;
   onDeleteMember?: (id: string) => void;
   currentYear?: number;
+  treeSettings?: TreeSettings;
 }
 
 const FamilyTree: React.FC<FamilyTreeProps> = ({ 
@@ -47,7 +48,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   onAddSibling,
   onAddSpouse,
   onDeleteMember,
-  currentYear
+  currentYear,
+  treeSettings
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -401,9 +403,15 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     const gContent = g.append("g");
 
+    // Filter Extra Links based on settings
+    const visibleExtraLinks = extraLinks.filter(d => {
+        if (d.label === 'همسر' && treeSettings && !treeSettings.showSpouseConnections) return false;
+        return true;
+    });
+
     // Draw Extra Links (Connections like Spouses)
     gContent.selectAll(".extra-link")
-      .data(extraLinks)
+      .data(visibleExtraLinks)
       .enter().append("path")
       .attr("class", "extra-link")
       .attr("d", (d: any) => {
@@ -444,6 +452,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     // Draw Tree Links
     const visibleLinks = nodes.links().filter((d: any) => {
         if (d.source.data.relation === 'SystemRoot') return false;
+        // Check settings for hierarchy links
+        if (treeSettings && !treeSettings.showParentChildConnections) return false;
+
         // Hide link if the target is a "moved" spouse (visual sibling, not actual child)
         // @ts-ignore
         if (d.target.data._isMoved) return false; 
@@ -552,7 +563,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     // Node Image or Gender Icon
     animatedNode.each(function(d: HierarchyPointNode<FamilyMember>) {
         const el = select(this);
-        if (d.data.imageUrl) {
+        const shouldShowAvatar = treeSettings?.showAvatars ?? true;
+        
+        if (d.data.imageUrl && shouldShowAvatar) {
             el.append("image")
               .attr("xlink:href", d.data.imageUrl)
               .attr("x", -28)
@@ -562,7 +575,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
               .attr("clip-path", `url(#${clipPathId(d)})`)
               .attr("preserveAspectRatio", "xMidYMid slice");
         } else {
-            // Draw Gender Icon if no image
+            // Draw Gender Icon if no image or avatars hidden
             // Scale up for better visibility inside the 30px radius circle
             const iconScale = 1.5; 
             const iconSize = 24 * iconScale;
@@ -586,8 +599,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
               .attr("transform", `translate(${offset}, ${offset}) scale(${iconScale})`);
         }
 
-        // Add Heart Icon if spouse exists
-        if (d.data.connections && d.data.connections.some(c => c.label === 'همسر')) {
+        // Add Heart Icon if spouse exists (and settings allow)
+        const showSpouseIcon = treeSettings?.showSpouseConnections ?? true;
+        if (showSpouseIcon && d.data.connections && d.data.connections.some(c => c.label === 'همسر')) {
              el.append("circle")
                .attr("r", 8)
                .attr("cx", 22)
@@ -603,26 +617,30 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     });
 
     // Node Name
-    animatedNode.append("text")
-      .attr("dy", 45)
-      .attr("text-anchor", "middle")
-      .text((d: any) => d.data.name)
-      .style("font-family", "Vazirmatn")
-      .style("font-size", "12px")
-      .style("font-weight", "bold")
-      .style("fill", colors.text)
-      .style("text-shadow", "0px 1px 2px rgba(255,255,255,0.8)");
+    if (treeSettings?.showLabels) {
+        animatedNode.append("text")
+          .attr("dy", 45)
+          .attr("text-anchor", "middle")
+          .text((d: any) => d.data.name)
+          .style("font-family", "Vazirmatn")
+          .style("font-size", "12px")
+          .style("font-weight", "bold")
+          .style("fill", colors.text)
+          .style("text-shadow", "0px 1px 2px rgba(255,255,255,0.8)");
+    }
 
     // Node Date
-    animatedNode.append("text")
-      .attr("dy", 58)
-      .attr("text-anchor", "middle")
-      .text((d: any) => d.data.birthDate ? d.data.birthDate.split('/')[0] : '')
-      .style("font-family", "monospace")
-      .style("font-size", "10px")
-      .style("fill", colors.textSecondary);
+    if (treeSettings?.showDates) {
+        animatedNode.append("text")
+          .attr("dy", 58)
+          .attr("text-anchor", "middle")
+          .text((d: any) => d.data.birthDate ? d.data.birthDate.split('/')[0] : '')
+          .style("font-family", "monospace")
+          .style("font-size", "10px")
+          .style("fill", colors.textSecondary);
+    }
 
-  }, [data, dimensions, orientation, theme, highlightedIds, linkStyle, preventOverlap, currentYear]);
+  }, [data, dimensions, orientation, theme, highlightedIds, linkStyle, preventOverlap, currentYear, treeSettings]);
 
   // Handlers
   const handleZoomIn = () => {
