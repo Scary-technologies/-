@@ -3,7 +3,7 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { FamilyMember, AppTheme, TreeSettings } from './types';
 import FamilyTree from './components/FamilyTree';
 import MemberPanel from './components/MemberPanel';
-import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, CheckCircle2, RefreshCcw, Plus, Moon, ListFilter, Clock, ScanEye, ArrowUpFromLine, ArrowDownToLine, RotateCcw, Keyboard, Command, AlertTriangle, Info, CheckCircle, SlidersHorizontal, Eye, EyeOff, Type, Layers, Timer, Printer } from 'lucide-react';
+import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, CheckCircle2, RefreshCcw, Plus, Moon, ListFilter, Clock, ScanEye, ArrowUpFromLine, ArrowDownToLine, RotateCcw, Keyboard, Command, AlertTriangle, Info, CheckCircle, SlidersHorizontal, Eye, EyeOff, Type, Layers, Timer, Printer, GitBranch, GitMerge, Layout, User } from 'lucide-react';
 
 // Historical Context Data
 const historicalEvents = [
@@ -254,7 +254,10 @@ const App: React.FC = () => {
       colorMode: 'default',
       fontStyle: 'modern',
       showAge: false,
-      showGenerationLabels: false
+      showGenerationLabels: false,
+      // Layout & Links
+      linkStyle: 'curved',
+      preventOverlap: false
   });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -793,90 +796,107 @@ const App: React.FC = () => {
                                 <h4 className="text-xs font-bold opacity-70 mb-2 border-b border-dashed pb-2 border-slate-300 dark:border-slate-600">تنظیمات تخصصی نمایش</h4>
                                 
                                 <div className="space-y-3">
-                                    {/* --- NEW CONTROLS --- */}
-                                    
-                                    <label className="flex items-center justify-between cursor-pointer group">
-                                        <span className="text-sm flex items-center gap-2"><Minimize size={14}/> حالت فشرده</span>
-                                        <div className={`relative w-10 h-5 rounded-full transition-colors ${treeSettings.isCompact ? 'bg-teal-500' : 'bg-slate-300 dark:bg-slate-600'}`} onClick={() => setTreeSettings(s => ({...s, isCompact: !s.isCompact}))}>
-                                            <div className={`absolute top-0.5 right-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${treeSettings.isCompact ? 'translate-x-0' : '-translate-x-5'}`}></div>
+                                    {/* --- LAYOUT & STYLE --- */}
+                                    <div className="space-y-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                                        <div className="text-[10px] opacity-50 font-bold uppercase tracking-wider mb-1">چیدمان و استایل</div>
+                                        
+                                        <label className="flex items-center justify-between cursor-pointer group">
+                                            <span className="text-sm flex items-center gap-2"><Minimize size={14}/> حالت فشرده</span>
+                                            <div className={`relative w-10 h-5 rounded-full transition-colors ${treeSettings.isCompact ? 'bg-teal-500' : 'bg-slate-300 dark:bg-slate-600'}`} onClick={() => setTreeSettings(s => ({...s, isCompact: !s.isCompact}))}>
+                                                <div className={`absolute top-0.5 right-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${treeSettings.isCompact ? 'translate-x-0' : '-translate-x-5'}`}></div>
+                                            </div>
+                                        </label>
+
+                                        <label className="flex items-center justify-between cursor-pointer group">
+                                            <span className="text-sm flex items-center gap-2"><Layout size={14}/> سبک خطوط</span>
+                                            <select 
+                                              className={`text-xs p-1 rounded border outline-none ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-300'}`}
+                                              value={treeSettings.linkStyle}
+                                              onChange={(e) => setTreeSettings(s => ({...s, linkStyle: e.target.value as any}))}
+                                            >
+                                                <option value="curved">منحنی (زیبا)</option>
+                                                <option value="step">شکسته (مهندسی)</option>
+                                                <option value="straight">صاف (مستقیم)</option>
+                                            </select>
+                                        </label>
+                                        
+                                        <label className="flex items-center justify-between cursor-pointer group">
+                                            <span className="text-sm flex items-center gap-2"><GitMerge size={14}/> جلوگیری از تداخل</span>
+                                            <div onClick={() => setTreeSettings(s => ({...s, preventOverlap: !s.preventOverlap}))}>
+                                                {treeSettings.preventOverlap ? <CheckCircle size={18} className="text-teal-500"/> : <div className="w-[18px] h-[18px] rounded-full border border-slate-400"></div>}
+                                            </div>
+                                        </label>
+                                    </div>
+
+                                    {/* --- APPEARANCE --- */}
+                                    <div className="space-y-2 pb-2 border-b border-slate-100 dark:border-slate-800">
+                                        <div className="text-[10px] opacity-50 font-bold uppercase tracking-wider mb-1">ظاهر</div>
+
+                                        <label className="flex items-center justify-between cursor-pointer group">
+                                            <span className="text-sm flex items-center gap-2"><Palette size={14}/> رنگ‌بندی شاخه‌ها</span>
+                                            <select 
+                                              className={`text-xs p-1 rounded border outline-none ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-300'}`}
+                                              value={treeSettings.colorMode}
+                                              onChange={(e) => setTreeSettings(s => ({...s, colorMode: e.target.value as any}))}
+                                            >
+                                                <option value="default">پیش‌فرض</option>
+                                                <option value="branch">بر اساس شاخه</option>
+                                            </select>
+                                        </label>
+
+                                        <label className="flex items-center justify-between cursor-pointer group">
+                                            <span className="text-sm flex items-center gap-2"><Type size={14}/> قلم (فونت)</span>
+                                            <select 
+                                              className={`text-xs p-1 rounded border outline-none ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-300'}`}
+                                              value={treeSettings.fontStyle}
+                                              onChange={(e) => setTreeSettings(s => ({...s, fontStyle: e.target.value as any}))}
+                                            >
+                                                <option value="modern">مدرن (وزیر)</option>
+                                                <option value="classic">کلاسیک (نسخ)</option>
+                                            </select>
+                                        </label>
+                                    </div>
+
+                                    {/* --- CONTENT --- */}
+                                    <div className="space-y-2">
+                                        <div className="text-[10px] opacity-50 font-bold uppercase tracking-wider mb-1">محتوا</div>
+
+                                        <label className="flex items-center justify-between cursor-pointer group">
+                                            <span className="text-sm flex items-center gap-2"><Timer size={14}/> نمایش سن/عمر</span>
+                                            <div onClick={() => setTreeSettings(s => ({...s, showAge: !s.showAge}))}>
+                                                {treeSettings.showAge ? <Eye size={18} className="text-teal-500"/> : <EyeOff size={18} className="text-slate-400"/>}
+                                            </div>
+                                        </label>
+
+                                        <label className="flex items-center justify-between cursor-pointer group">
+                                            <span className="text-sm flex items-center gap-2"><Layers size={14}/> برچسب نسل‌ها</span>
+                                            <div onClick={() => setTreeSettings(s => ({...s, showGenerationLabels: !s.showGenerationLabels}))}>
+                                                {treeSettings.showGenerationLabels ? <Eye size={18} className="text-teal-500"/> : <EyeOff size={18} className="text-slate-400"/>}
+                                            </div>
+                                        </label>
+
+                                        <label className="flex items-center justify-between cursor-pointer group">
+                                            <span className="text-sm flex items-center gap-2"><User size={14}/> تصاویر پروفایل</span>
+                                            <div onClick={() => setTreeSettings(s => ({...s, showAvatars: !s.showAvatars}))}>
+                                                {treeSettings.showAvatars ? <Eye size={18} className="text-teal-500"/> : <EyeOff size={18} className="text-slate-400"/>}
+                                            </div>
+                                        </label>
+                                        
+                                        <div className="flex justify-between items-center gap-2 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                            <button 
+                                                className={`flex-1 text-[10px] py-1 rounded border ${treeSettings.showSpouseConnections ? 'bg-pink-50 text-pink-600 border-pink-200' : 'opacity-50'}`}
+                                                onClick={() => setTreeSettings(s => ({...s, showSpouseConnections: !s.showSpouseConnections}))}
+                                            >
+                                                خطوط همسری
+                                            </button>
+                                            <button 
+                                                className={`flex-1 text-[10px] py-1 rounded border ${treeSettings.showParentChildConnections ? 'bg-teal-50 text-teal-600 border-teal-200' : 'opacity-50'}`}
+                                                onClick={() => setTreeSettings(s => ({...s, showParentChildConnections: !s.showParentChildConnections}))}
+                                            >
+                                                خطوط وراثت
+                                            </button>
                                         </div>
-                                    </label>
-
-                                    <label className="flex items-center justify-between cursor-pointer group">
-                                        <span className="text-sm flex items-center gap-2"><Palette size={14}/> رنگ‌بندی شاخه‌ها</span>
-                                        <select 
-                                          className={`text-xs p-1 rounded border ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-300'}`}
-                                          value={treeSettings.colorMode}
-                                          onChange={(e) => setTreeSettings(s => ({...s, colorMode: e.target.value as any}))}
-                                        >
-                                            <option value="default">پیش‌فرض</option>
-                                            <option value="branch">بر اساس شاخه</option>
-                                        </select>
-                                    </label>
-
-                                    <label className="flex items-center justify-between cursor-pointer group">
-                                        <span className="text-sm flex items-center gap-2"><Type size={14}/> قلم (فونت)</span>
-                                        <select 
-                                          className={`text-xs p-1 rounded border ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-300'}`}
-                                          value={treeSettings.fontStyle}
-                                          onChange={(e) => setTreeSettings(s => ({...s, fontStyle: e.target.value as any}))}
-                                        >
-                                            <option value="modern">مدرن (وزیر)</option>
-                                            <option value="classic">کلاسیک (نسخ)</option>
-                                        </select>
-                                    </label>
-
-                                    <label className="flex items-center justify-between cursor-pointer group">
-                                        <span className="text-sm flex items-center gap-2"><Timer size={14}/> نمایش سن/عمر</span>
-                                        <div onClick={() => setTreeSettings(s => ({...s, showAge: !s.showAge}))}>
-                                            {treeSettings.showAge ? <Eye size={18} className="text-teal-500"/> : <EyeOff size={18} className="text-slate-400"/>}
-                                        </div>
-                                    </label>
-
-                                    <label className="flex items-center justify-between cursor-pointer group">
-                                        <span className="text-sm flex items-center gap-2"><Layers size={14}/> برچسب نسل‌ها</span>
-                                        <div onClick={() => setTreeSettings(s => ({...s, showGenerationLabels: !s.showGenerationLabels}))}>
-                                            {treeSettings.showGenerationLabels ? <Eye size={18} className="text-teal-500"/> : <EyeOff size={18} className="text-slate-400"/>}
-                                        </div>
-                                    </label>
-
-                                    <div className="h-px bg-slate-200 dark:bg-slate-700"></div>
-
-                                    {/* --- EXISTING CONTROLS --- */}
-                                    <label className="flex items-center justify-between cursor-pointer group">
-                                        <span className="text-sm">خطوط همسری</span>
-                                        <div className={`relative w-10 h-5 rounded-full transition-colors ${treeSettings.showSpouseConnections ? 'bg-pink-500' : 'bg-slate-300 dark:bg-slate-600'}`} onClick={() => setTreeSettings(s => ({...s, showSpouseConnections: !s.showSpouseConnections}))}>
-                                            <div className={`absolute top-0.5 right-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${treeSettings.showSpouseConnections ? 'translate-x-0' : '-translate-x-5'}`}></div>
-                                        </div>
-                                    </label>
-
-                                    <label className="flex items-center justify-between cursor-pointer group">
-                                        <span className="text-sm">خطوط وراثت</span>
-                                        <div className={`relative w-10 h-5 rounded-full transition-colors ${treeSettings.showParentChildConnections ? 'bg-teal-500' : 'bg-slate-300 dark:bg-slate-600'}`} onClick={() => setTreeSettings(s => ({...s, showParentChildConnections: !s.showParentChildConnections}))}>
-                                            <div className={`absolute top-0.5 right-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${treeSettings.showParentChildConnections ? 'translate-x-0' : '-translate-x-5'}`}></div>
-                                        </div>
-                                    </label>
-
-                                    <label className="flex items-center justify-between cursor-pointer group">
-                                        <span className="text-sm">نمایش تصاویر</span>
-                                        <div onClick={() => setTreeSettings(s => ({...s, showAvatars: !s.showAvatars}))}>
-                                            {treeSettings.showAvatars ? <Eye size={18} className="text-teal-500"/> : <EyeOff size={18} className="text-slate-400"/>}
-                                        </div>
-                                    </label>
-                                    
-                                    <label className="flex items-center justify-between cursor-pointer group">
-                                        <span className="text-sm">نمایش نام‌ها</span>
-                                        <div onClick={() => setTreeSettings(s => ({...s, showLabels: !s.showLabels}))}>
-                                            {treeSettings.showLabels ? <Eye size={18} className="text-teal-500"/> : <EyeOff size={18} className="text-slate-400"/>}
-                                        </div>
-                                    </label>
-
-                                    <label className="flex items-center justify-between cursor-pointer group">
-                                        <span className="text-sm">نمایش تاریخ</span>
-                                        <div onClick={() => setTreeSettings(s => ({...s, showDates: !s.showDates}))}>
-                                            {treeSettings.showDates ? <Eye size={18} className="text-teal-500"/> : <EyeOff size={18} className="text-slate-400"/>}
-                                        </div>
-                                    </label>
+                                    </div>
                                 </div>
                           </div>
                       )}
@@ -1053,6 +1073,7 @@ const App: React.FC = () => {
           onDeleteMember={handleDeleteMember}
           currentYear={isTimeSliderVisible ? currentYear : undefined}
           treeSettings={treeSettings}
+          onSettingsChange={(settings) => setTreeSettings(s => ({ ...s, ...settings }))}
         />
       </div>
 

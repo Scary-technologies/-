@@ -78,6 +78,9 @@ export interface TreeSettings {
   fontStyle: 'modern' | 'classic'; // Modern = Vazirmatn, Classic = Naskh
   showAge: boolean;
   showGenerationLabels: boolean;
+  // Layout & Links
+  linkStyle: 'curved' | 'step' | 'straight';
+  preventOverlap: boolean;
 }
 
 export type AppTheme = 'modern' | 'dark';

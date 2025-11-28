@@ -6,7 +6,9 @@ import {
   zoomIdentity, 
   tree as d3Tree, 
   hierarchy,
-  schemeCategory10
+  schemeCategory10,
+  easeQuadOut,
+  easeElasticOut
 } from 'd3';
 import { FamilyMember, AppTheme, TreeSettings } from '../types';
 import { Maximize, ZoomIn, ZoomOut, ArrowDown, ArrowRight, Heart, User, Plus, Trash2, GitBranch, GitMerge, XCircle } from 'lucide-react';
@@ -36,7 +38,8 @@ interface FamilyTreeProps {
   onAddSpouse?: (memberId: string) => void;
   onDeleteMember?: (id: string) => void;
   currentYear?: number;
-  treeSettings?: TreeSettings;
+  treeSettings: TreeSettings;
+  onSettingsChange?: (settings: Partial<TreeSettings>) => void;
 }
 
 const FamilyTree: React.FC<FamilyTreeProps> = ({ 
@@ -53,7 +56,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   onAddSpouse,
   onDeleteMember,
   currentYear,
-  treeSettings
+  treeSettings,
+  onSettingsChange
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -61,9 +65,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const [zoomTransform, setZoomTransform] = useState(zoomIdentity.translate(120, 80));
   const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   
-  // Link styles: 'curved' (Bezier), 'step' (Orthogonal), 'straight' (Direct)
-  const [linkStyle, setLinkStyle] = useState<'curved' | 'step' | 'straight'>('curved');
-  const [preventOverlap, setPreventOverlap] = useState(false);
   const [selectedNodePos, setSelectedNodePos] = useState<{x: number, y: number} | null>(null);
   
   // Context Menu State
@@ -270,8 +271,24 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     const colors = getThemeColors(theme);
     const hasHighlight = highlightedIds.size > 0;
-    const isCompact = treeSettings?.isCompact || false;
-    const isClassicFont = treeSettings?.fontStyle === 'classic';
+    
+    // Deconstruct settings
+    const { 
+        isCompact, 
+        fontStyle, 
+        colorMode, 
+        showGenerationLabels, 
+        showAvatars, 
+        showSpouseConnections, 
+        showParentChildConnections, 
+        showLabels, 
+        showDates, 
+        showAge,
+        linkStyle,
+        preventOverlap 
+    } = treeSettings;
+
+    const isClassicFont = fontStyle === 'classic';
     const fontFamily = isClassicFont ? '"Noto Naskh Arabic", serif' : '"Vazirmatn", sans-serif';
 
     select(svgRef.current).selectAll("*").remove();
@@ -335,16 +352,12 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     
     // Assign Branch Colors & Generation Info
     nodes.descendants().forEach((d: any) => {
-        // Depth Calculation for Generation Labels
-        // d.depth is already available
-
         // Branch Coloring Logic
-        if (treeSettings?.colorMode === 'branch') {
+        if (colorMode === 'branch') {
             if (d.depth === 0) {
                 d._branchColor = colors.nodeStroke;
             } else if (d.depth === 1) {
                 // Assign color based on index among siblings
-                // We use the index in parent's children array
                 const index = d.parent.children.indexOf(d);
                 d._branchColor = BRANCH_COLORS[index % BRANCH_COLORS.length];
                 d._branchIndex = index;
@@ -359,37 +372,33 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     });
 
     // --- Generation Labels (Background Layer) ---
-    if (treeSettings?.showGenerationLabels) {
+    if (showGenerationLabels) {
         const depths = new Set(nodes.descendants().map((d: any) => d.depth));
         const depthArray = Array.from(depths).sort((a: any, b: any) => a - b);
         
         const labelsG = g.append("g").attr("class", "generation-labels");
         
         depthArray.forEach((depth: any) => {
-            // Ignore SystemRoot (depth 0) for labels. 
-            // We want "Root" (depth 1) to be Generation 1.
             if (depth === 0) return;
 
             const nodesAtDepth = nodes.descendants().filter((d: any) => d.depth === depth);
             if (nodesAtDepth.length === 0) return;
 
-            // Find average position
             let avgPos = 0;
             if (orientation === 'horizontal') {
-                avgPos = nodesAtDepth[0].y; // Y in D3 tree is X on screen for horizontal
+                avgPos = nodesAtDepth[0].y; 
                 
                 labelsG.append("text")
                     .attr("x", avgPos)
-                    .attr("y", -dimensions.height / 2 + 50) // Top of screen roughly
+                    .attr("y", -dimensions.height / 2 + 50)
                     .attr("text-anchor", "middle")
-                    .text(`نسل ${depth}`) // Display depth directly (e.g. depth 1 is Gen 1)
+                    .text(`نسل ${depth}`)
                     .style("font-family", fontFamily)
                     .style("font-size", "24px")
                     .style("font-weight", "bold")
                     .style("opacity", 0.1)
                     .style("fill", colors.text);
                     
-                // Draw vertical line background
                 labelsG.append("line")
                     .attr("x1", avgPos)
                     .attr("y1", -5000)
@@ -401,21 +410,20 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                     .style("opacity", 0.05);
 
             } else {
-                avgPos = nodesAtDepth[0].y; // Y is Y on screen
+                avgPos = nodesAtDepth[0].y; 
                 
                 labelsG.append("text")
                     .attr("x", -dimensions.width / 2 + 50)
                     .attr("y", avgPos)
                     .attr("text-anchor", "start")
                     .attr("alignment-baseline", "middle")
-                    .text(`نسل ${depth}`) // Display depth directly
+                    .text(`نسل ${depth}`)
                     .style("font-family", fontFamily)
                     .style("font-size", "24px")
                     .style("font-weight", "bold")
                     .style("opacity", 0.1)
                     .style("fill", colors.text);
 
-                // Draw horizontal line background
                 labelsG.append("line")
                     .attr("x1", -5000)
                     .attr("y1", avgPos)
@@ -502,7 +510,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     const gContent = g.append("g");
 
     const visibleExtraLinks = extraLinks.filter(d => {
-        if (d.label === 'همسر' && treeSettings && !treeSettings.showSpouseConnections) return false;
+        if (d.label === 'همسر' && !showSpouseConnections) return false;
         return true;
     });
 
@@ -543,7 +551,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     const visibleLinks = nodes.links().filter((d: any) => {
         if (d.source.data.relation === 'SystemRoot') return false;
-        if (treeSettings && !treeSettings.showParentChildConnections) return false;
+        if (!showParentChildConnections) return false;
         // @ts-ignore
         if (d.target.data._isMoved) return false; 
         return true;
@@ -558,8 +566,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr("stroke", (d: any) => {
           if (hasHighlight && highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id)) return colors.selectedRing;
           
-          // Use Branch Color for Link if enabled
-          if (treeSettings?.colorMode === 'branch' && d.target._branchColor) {
+          if (colorMode === 'branch' && d.target._branchColor) {
               return d.target._branchColor;
           }
 
@@ -585,7 +592,24 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .on("click", (event: any, d: HierarchyPointNode<FamilyMember>) => {
         if(d.data.relation === 'SystemRoot') return;
         event.stopPropagation();
-        onNodeClick(d.data);
+        
+        // --- Click Feedback Animation ---
+        const el = select(event.currentTarget);
+        const transform = el.attr("transform");
+        
+        // Instant "press" effect (scale down then up)
+        el.transition()
+            .duration(100)
+            .ease(easeQuadOut)
+            .attr("transform", `${transform} scale(0.9)`)
+            .transition()
+            .duration(150)
+            .ease(easeElasticOut)
+            .attr("transform", `${transform} scale(1)`);
+            
+        setTimeout(() => {
+           onNodeClick(d.data);
+        }, 50);
       })
       .on("dblclick", (event: any, d: HierarchyPointNode<FamilyMember>) => {
           if(d.data.relation === 'SystemRoot') return;
@@ -616,12 +640,22 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     animatedNode.each(function(d: any) {
         if (selectedId === d.data.id) {
             const el = select(this);
-            el.append("circle")
+            
+            // 1. Inner Glow/Pulse (Background)
+            el.insert("circle", ":first-child")
               .attr("r", isCompact ? 20 : 30)
+              .attr("fill", colors.selectedRing)
+              .attr("fill-opacity", 0.2)
+              .attr("class", "animate-pulse-ring");
+
+            // 2. Outer Dashed Ring (Selection Indicator)
+            el.append("circle")
+              .attr("r", isCompact ? 23 : 33)
               .attr("fill", "none")
               .attr("stroke", colors.selectedRing)
-              .attr("stroke-width", "2px")
-              .attr("class", "animate-pulse-ring opacity-50");
+              .attr("stroke-width", "1.5px")
+              .attr("stroke-dasharray", "4,3")
+              .attr("stroke-opacity", 0.7);
         }
     });
 
@@ -630,10 +664,10 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr("fill", colors.nodeFill)
       .attr("stroke", (d: any) => {
           if (selectedId === d.data.id) return colors.selectedRing;
-          if (treeSettings?.colorMode === 'branch' && d._branchColor) return d._branchColor;
+          if (colorMode === 'branch' && d._branchColor) return d._branchColor;
           return colors.nodeStroke;
       })
-      .attr("stroke-width", (d: any) => selectedId === d.data.id ? "4px" : "2px")
+      .attr("stroke-width", (d: any) => selectedId === d.data.id ? "3px" : "2px") // Thicker stroke for selected
       .style("filter", "drop-shadow(0px 4px 6px rgba(0,0,0,0.1))")
       .style("transition", "all 0.3s ease");
 
@@ -645,7 +679,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     animatedNode.each(function(d: HierarchyPointNode<FamilyMember>) {
         const el = select(this);
-        const shouldShowAvatar = (treeSettings?.showAvatars ?? true) && !isCompact;
+        const shouldShowAvatar = (showAvatars ?? true) && !isCompact;
         
         if (d.data.imageUrl && shouldShowAvatar) {
             el.append("image")
@@ -665,7 +699,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             let iconColor = colors.maleIcon;
 
             // Use Branch Color for Icon if no image in Branch Mode
-            if (treeSettings?.colorMode === 'branch' && d._branchColor) {
+            if (colorMode === 'branch' && d._branchColor) {
                 iconColor = d._branchColor;
             } else {
                 if (d.data.gender === 'female') {
@@ -683,8 +717,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
               .attr("transform", `translate(${offset}, ${offset}) scale(${iconScale})`);
         }
 
-        const showSpouseIcon = treeSettings?.showSpouseConnections ?? true;
-        if (showSpouseIcon && d.data.connections && d.data.connections.some(c => c.label === 'همسر')) {
+        const shouldShowSpouseIcon = showSpouseConnections ?? true;
+        if (shouldShowSpouseIcon && d.data.connections && d.data.connections.some(c => c.label === 'همسر')) {
              const cx = isCompact ? 14 : 22;
              const cy = isCompact ? 14 : 22;
              const r = isCompact ? 6 : 8;
@@ -706,7 +740,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         }
     });
 
-    if (treeSettings?.showLabels) {
+    if (showLabels) {
         const textY = isCompact ? 32 : 45;
         animatedNode.append("text")
           .attr("dy", textY)
@@ -719,25 +753,25 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           .style("text-shadow", "0px 1px 2px rgba(255,255,255,0.8)");
     }
 
-    if (treeSettings?.showDates) {
+    if (showDates) {
         const dateY = isCompact ? 42 : 58;
         animatedNode.append("text")
           .attr("dy", dateY)
           .attr("text-anchor", "middle")
           .text((d: any) => {
               const birth = d.data.birthDate ? d.data.birthDate.split('/')[0] : '';
-              if (treeSettings?.showAge) {
+              if (showAge) {
                   const age = calculateAge(d.data.birthDate, d.data.deathDate);
                   return birth + (age ? ` ${age}` : '');
               }
               return birth;
           })
-          .style("font-family", "monospace") // Numbers look better in monospace usually, but can change
+          .style("font-family", "monospace")
           .style("font-size", "10px")
           .style("fill", colors.textSecondary);
     }
 
-  }, [data, dimensions, orientation, theme, highlightedIds, linkStyle, preventOverlap, currentYear, treeSettings]);
+  }, [data, dimensions, orientation, theme, highlightedIds, currentYear, treeSettings]);
 
   const handleZoomIn = () => {
     if (svgRef.current && zoomRef.current) {
@@ -782,9 +816,11 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   };
 
   const toggleLinkStyle = () => {
-      if (linkStyle === 'curved') setLinkStyle('step');
-      else if (linkStyle === 'step') setLinkStyle('straight');
-      else setLinkStyle('curved');
+      const current = treeSettings.linkStyle;
+      const next = current === 'curved' ? 'step' : current === 'step' ? 'straight' : 'curved';
+      if (onSettingsChange) {
+         onSettingsChange({ linkStyle: next });
+      }
   };
 
   const glassClass = theme === 'dark' ? 'glass-panel-dark' : 'glass-panel';
@@ -807,8 +843,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         <button onClick={() => onOrientationChange('vertical')} className={`p-2 rounded-lg transition-colors ${orientation === 'vertical' ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title="عمودی"><ArrowDown size={20} /></button>
         <button onClick={() => onOrientationChange('horizontal')} className={`p-2 rounded-lg transition-colors ${orientation === 'horizontal' ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title="افقی"><ArrowRight size={20} /></button>
         <div className="h-px bg-slate-300 dark:bg-slate-600 my-1 mx-2"></div>
-        <button onClick={toggleLinkStyle} className={`p-2 rounded-lg transition-colors ${linkStyle !== 'curved' ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title={`تغییر نوع خط: ${linkStyle === 'curved' ? 'منحنی' : linkStyle === 'step' ? 'شکسته' : 'صاف'}`}><GitBranch size={20} /></button>
-        <button onClick={() => setPreventOverlap(!preventOverlap)} className={`p-2 rounded-lg transition-colors ${preventOverlap ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title="جلوگیری از تداخل"><GitMerge size={20} /></button>
+        <button onClick={toggleLinkStyle} className={`p-2 rounded-lg transition-colors ${treeSettings.linkStyle !== 'curved' ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title={`تغییر نوع خط: ${treeSettings.linkStyle === 'curved' ? 'منحنی' : treeSettings.linkStyle === 'step' ? 'شکسته' : 'صاف'}`}><GitBranch size={20} /></button>
+        <button onClick={() => onSettingsChange && onSettingsChange({ preventOverlap: !treeSettings.preventOverlap })} className={`p-2 rounded-lg transition-colors ${treeSettings.preventOverlap ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title="جلوگیری از تداخل"><GitMerge size={20} /></button>
       </div>
 
       {/* Custom Context Menu */}
