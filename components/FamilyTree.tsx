@@ -366,7 +366,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         const labelsG = g.append("g").attr("class", "generation-labels");
         
         depthArray.forEach((depth: any) => {
-            if (depth === 0 && orientation === 'vertical') return; // Hide root label in vertical usually
+            // Ignore SystemRoot (depth 0) for labels. 
+            // We want "Root" (depth 1) to be Generation 1.
+            if (depth === 0) return;
 
             const nodesAtDepth = nodes.descendants().filter((d: any) => d.depth === depth);
             if (nodesAtDepth.length === 0) return;
@@ -380,7 +382,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                     .attr("x", avgPos)
                     .attr("y", -dimensions.height / 2 + 50) // Top of screen roughly
                     .attr("text-anchor", "middle")
-                    .text(`نسل ${depth + 1}`)
+                    .text(`نسل ${depth}`) // Display depth directly (e.g. depth 1 is Gen 1)
                     .style("font-family", fontFamily)
                     .style("font-size", "24px")
                     .style("font-weight", "bold")
@@ -406,7 +408,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                     .attr("y", avgPos)
                     .attr("text-anchor", "start")
                     .attr("alignment-baseline", "middle")
-                    .text(`نسل ${depth + 1}`)
+                    .text(`نسل ${depth}`) // Display depth directly
                     .style("font-family", fontFamily)
                     .style("font-size", "24px")
                     .style("font-weight", "bold")
