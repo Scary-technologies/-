@@ -180,6 +180,42 @@
       .context-menu-enter {
         animation: contextEnter 0.1s ease-out forwards;
       }
+
+      /* Print Styles */
+      @media print {
+        @page {
+          size: landscape;
+          margin: 0;
+        }
+        body {
+          background: white !important;
+          color: black !important;
+        }
+        header, 
+        .absolute.bottom-6, 
+        .animate-slide-up,
+        button,
+        input[type="range"],
+        .glass-panel,
+        .glass-panel-dark {
+          display: none !important;
+        }
+        #root, svg {
+          width: 100vw !important;
+          height: 100vh !important;
+          overflow: visible !important;
+        }
+        /* Ensure labels are visible in print */
+        text {
+          fill: black !important;
+          text-shadow: none !important;
+        }
+        path, circle, line {
+           /* Ensure colors print correctly */
+           -webkit-print-color-adjust: exact;
+           print-color-adjust: exact; 
+        }
+      }
     </style>
   <script type="importmap">
 {

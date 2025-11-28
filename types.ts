@@ -72,6 +72,12 @@ export interface TreeSettings {
   showDates: boolean;
   showAvatars: boolean;
   showGenderIcons: boolean;
+  // New Features
+  isCompact: boolean;
+  colorMode: 'default' | 'branch';
+  fontStyle: 'modern' | 'classic'; // Modern = Vazirmatn, Classic = Naskh
+  showAge: boolean;
+  showGenerationLabels: boolean;
 }
 
 export type AppTheme = 'modern' | 'dark';

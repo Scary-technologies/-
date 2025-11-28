@@ -3,7 +3,7 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { FamilyMember, AppTheme, TreeSettings } from './types';
 import FamilyTree from './components/FamilyTree';
 import MemberPanel from './components/MemberPanel';
-import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, CheckCircle2, RefreshCcw, Plus, Moon, ListFilter, Clock, ScanEye, ArrowUpFromLine, ArrowDownToLine, RotateCcw, Keyboard, Command, AlertTriangle, Info, CheckCircle, SlidersHorizontal, Eye, EyeOff } from 'lucide-react';
+import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, CheckCircle2, RefreshCcw, Plus, Moon, ListFilter, Clock, ScanEye, ArrowUpFromLine, ArrowDownToLine, RotateCcw, Keyboard, Command, AlertTriangle, Info, CheckCircle, SlidersHorizontal, Eye, EyeOff, Type, Layers, Timer, Printer } from 'lucide-react';
 
 // Historical Context Data
 const historicalEvents = [
@@ -248,7 +248,13 @@ const App: React.FC = () => {
       showLabels: true,
       showDates: true,
       showAvatars: true,
-      showGenderIcons: true
+      showGenderIcons: true,
+      // Default new settings
+      isCompact: false,
+      colorMode: 'default',
+      fontStyle: 'modern',
+      showAge: false,
+      showGenerationLabels: false
   });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -641,6 +647,13 @@ const App: React.FC = () => {
           setIsTreeSettingsOpen(prev => !prev);
           return;
       }
+      
+      // Ctrl+P: Print
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+          e.preventDefault();
+          window.print();
+          return;
+      }
 
       // Escape: Close Modals/Menus/Selection
       if (e.key === 'Escape') {
@@ -776,10 +789,60 @@ const App: React.FC = () => {
                       </button>
                       
                       {isTreeSettingsOpen && (
-                          <div className={`absolute top-full right-0 mt-3 w-64 rounded-xl shadow-xl z-50 p-4 space-y-4 animate-slide-up ${theme === 'dark' ? 'glass-panel-dark border-slate-700' : 'glass-panel border-white/50'}`}>
+                          <div className={`absolute top-full right-0 mt-3 w-72 rounded-xl shadow-xl z-50 p-4 space-y-4 animate-slide-up ${theme === 'dark' ? 'glass-panel-dark border-slate-700' : 'glass-panel border-white/50'}`}>
                                 <h4 className="text-xs font-bold opacity-70 mb-2 border-b border-dashed pb-2 border-slate-300 dark:border-slate-600">تنظیمات تخصصی نمایش</h4>
                                 
                                 <div className="space-y-3">
+                                    {/* --- NEW CONTROLS --- */}
+                                    
+                                    <label className="flex items-center justify-between cursor-pointer group">
+                                        <span className="text-sm flex items-center gap-2"><Minimize size={14}/> حالت فشرده</span>
+                                        <div className={`relative w-10 h-5 rounded-full transition-colors ${treeSettings.isCompact ? 'bg-teal-500' : 'bg-slate-300 dark:bg-slate-600'}`} onClick={() => setTreeSettings(s => ({...s, isCompact: !s.isCompact}))}>
+                                            <div className={`absolute top-0.5 right-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${treeSettings.isCompact ? 'translate-x-0' : '-translate-x-5'}`}></div>
+                                        </div>
+                                    </label>
+
+                                    <label className="flex items-center justify-between cursor-pointer group">
+                                        <span className="text-sm flex items-center gap-2"><Palette size={14}/> رنگ‌بندی شاخه‌ها</span>
+                                        <select 
+                                          className={`text-xs p-1 rounded border ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-300'}`}
+                                          value={treeSettings.colorMode}
+                                          onChange={(e) => setTreeSettings(s => ({...s, colorMode: e.target.value as any}))}
+                                        >
+                                            <option value="default">پیش‌فرض</option>
+                                            <option value="branch">بر اساس شاخه</option>
+                                        </select>
+                                    </label>
+
+                                    <label className="flex items-center justify-between cursor-pointer group">
+                                        <span className="text-sm flex items-center gap-2"><Type size={14}/> قلم (فونت)</span>
+                                        <select 
+                                          className={`text-xs p-1 rounded border ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : 'bg-white border-slate-300'}`}
+                                          value={treeSettings.fontStyle}
+                                          onChange={(e) => setTreeSettings(s => ({...s, fontStyle: e.target.value as any}))}
+                                        >
+                                            <option value="modern">مدرن (وزیر)</option>
+                                            <option value="classic">کلاسیک (نسخ)</option>
+                                        </select>
+                                    </label>
+
+                                    <label className="flex items-center justify-between cursor-pointer group">
+                                        <span className="text-sm flex items-center gap-2"><Timer size={14}/> نمایش سن/عمر</span>
+                                        <div onClick={() => setTreeSettings(s => ({...s, showAge: !s.showAge}))}>
+                                            {treeSettings.showAge ? <Eye size={18} className="text-teal-500"/> : <EyeOff size={18} className="text-slate-400"/>}
+                                        </div>
+                                    </label>
+
+                                    <label className="flex items-center justify-between cursor-pointer group">
+                                        <span className="text-sm flex items-center gap-2"><Layers size={14}/> برچسب نسل‌ها</span>
+                                        <div onClick={() => setTreeSettings(s => ({...s, showGenerationLabels: !s.showGenerationLabels}))}>
+                                            {treeSettings.showGenerationLabels ? <Eye size={18} className="text-teal-500"/> : <EyeOff size={18} className="text-slate-400"/>}
+                                        </div>
+                                    </label>
+
+                                    <div className="h-px bg-slate-200 dark:bg-slate-700"></div>
+
+                                    {/* --- EXISTING CONTROLS --- */}
                                     <label className="flex items-center justify-between cursor-pointer group">
                                         <span className="text-sm">خطوط همسری</span>
                                         <div className={`relative w-10 h-5 rounded-full transition-colors ${treeSettings.showSpouseConnections ? 'bg-pink-500' : 'bg-slate-300 dark:bg-slate-600'}`} onClick={() => setTreeSettings(s => ({...s, showSpouseConnections: !s.showSpouseConnections}))}>
@@ -793,8 +856,6 @@ const App: React.FC = () => {
                                             <div className={`absolute top-0.5 right-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${treeSettings.showParentChildConnections ? 'translate-x-0' : '-translate-x-5'}`}></div>
                                         </div>
                                     </label>
-
-                                    <div className="h-px bg-slate-200 dark:bg-slate-700"></div>
 
                                     <label className="flex items-center justify-between cursor-pointer group">
                                         <span className="text-sm">نمایش تصاویر</span>
@@ -963,6 +1024,9 @@ const App: React.FC = () => {
 
            <div className="h-6 w-px bg-current mx-1 hidden sm:block opacity-20"></div>
 
+           {/* Print Button */}
+           <button onClick={() => window.print()} className={`p-2 rounded-lg border hidden sm:flex transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100 text-slate-600 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white/40 border-white/50'}`} title="چاپ (Ctrl+P)"><Printer size={18} /></button>
+
            {/* File Controls */}
            <div className={`flex p-1 rounded-lg border hidden sm:flex ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white/40 border-white/50'}`}>
                <button onClick={handleExportJSON} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100 text-blue-600" title="دانلود فایل JSON"><Download size={18} /></button>
@@ -1034,6 +1098,10 @@ const App: React.FC = () => {
                       <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
                           <span>تنظیمات نمایش</span>
                           <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">Alt + S</kbd>
+                      </div>
+                      <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
+                          <span>چاپ (Print)</span>
+                          <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-700 rounded text-xs font-mono">Ctrl + P</kbd>
                       </div>
                       <div className="flex justify-between items-center p-2 rounded hover:bg-black/5">
                           <span>وسط چین / تمرکز</span>

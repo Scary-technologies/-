@@ -5,7 +5,8 @@ import {
   zoom as d3Zoom, 
   zoomIdentity, 
   tree as d3Tree, 
-  hierarchy 
+  hierarchy,
+  schemeCategory10
 } from 'd3';
 import { FamilyMember, AppTheme, TreeSettings } from '../types';
 import { Maximize, ZoomIn, ZoomOut, ArrowDown, ArrowRight, Heart, User, Plus, Trash2, GitBranch, GitMerge, XCircle } from 'lucide-react';
@@ -17,6 +18,9 @@ type ZoomBehavior<Element, Datum> = any;
 // SVG Paths for Gender Icons (Material Design Style)
 const MALE_ICON = "M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z";
 const FEMALE_ICON = "M12,4A4,4 0 0,1 16,8C16,9.95 14.6,11.58 12.75,11.93L12.75,12.09C12.75,12.09 16,13.67 16,18V20H8V18C8,13.9 11.25,12.09 11.25,12.09L11.25,11.93C9.4,11.58 8,9.95 8,8A4,4 0 0,1 12,4Z";
+
+// Branch Colors Palette (Teal, Amber, Rose, Indigo, Cyan, Violet)
+const BRANCH_COLORS = ['#0d9488', '#d97706', '#e11d48', '#4f46e5', '#0891b2', '#7c3aed'];
 
 interface FamilyTreeProps {
   data: FamilyMember;
@@ -73,6 +77,28 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       const part = dateStr.split('/')[0];
       const year = parseInt(part);
       return isNaN(year) ? -1 : year;
+  };
+
+  const calculateAge = (birthDate?: string, deathDate?: string): string => {
+      if (!birthDate) return '';
+      const bYear = getBirthYear(birthDate);
+      if (bYear === -1) return '';
+
+      // If dead
+      if (deathDate) {
+          const dYear = getBirthYear(deathDate);
+          if (dYear !== -1) return `(${dYear - bYear} سال)`;
+          return '(فوت شده)';
+      }
+
+      // If alive, use current system year (approximate Persian year logic)
+      const now = new Date();
+      // Simple approx: Gregorian Year - 621 = Shamsi Year
+      const currentShamsiYear = currentYear || (now.getFullYear() - 621);
+      
+      const age = currentShamsiYear - bYear;
+      if (age < 0) return '';
+      return `(${age} ساله)`;
   };
 
   // Helper to check visibility based on time-lapse
@@ -137,48 +163,34 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     traverse(clonedData, null);
 
     // 2. Identify "Floating Spouses" in SystemRoot and move them next to their deep-tree partners
-    // Only applies if the root is SystemRoot (the container for the forest)
     if (clonedData.relation === 'SystemRoot') {
         const rootChildren = [...(clonedData.children || [])];
         const nodesToRemoveFromRoot = new Set<string>();
 
         rootChildren.forEach((rootChild: any) => {
-            // Check for spouse connection
             const spouseConn = rootChild.connections?.find((c: any) => c.label === 'همسر');
             if (spouseConn) {
                 const partnerId = spouseConn.targetId;
                 const partner = idMap.get(partnerId);
                 const partnerParent = parentMap.get(partnerId);
 
-                // If partner exists and is NOT a direct child of SystemRoot (i.e. is deep)
-                // We verify partnerParent exists and is not SystemRoot
                 if (partner && partnerParent && partnerParent.id !== clonedData.id) {
-                    
-                    // Move rootChild to partnerParent's children
                     if (!partnerParent.children) partnerParent.children = [];
-                    
-                    // Insert immediately after partner
                     const idx = partnerParent.children.findIndex((c: any) => c.id === partnerId);
                     if (idx !== -1) {
                         partnerParent.children.splice(idx + 1, 0, rootChild);
                     } else {
                         partnerParent.children.push(rootChild);
                     }
-
-                    // Mark as moved so we don't draw parent-child link later
                     rootChild._isMoved = true;
-
-                    // Mark for removal from root
                     nodesToRemoveFromRoot.add(rootChild.id);
                 }
             }
         });
-
-        // Remove moved nodes from SystemRoot
         clonedData.children = clonedData.children.filter((c: any) => !nodesToRemoveFromRoot.has(c.id));
     }
 
-    // 3. Recursive Sort to ensure spouses are always adjacent at every level
+    // 3. Recursive Sort to ensure spouses are always adjacent
     const recursiveSort = (node: any) => {
         if (node.children && node.children.length > 0) {
             const sorted: any[] = [];
@@ -190,8 +202,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
                 sorted.push(child);
                 visited.add(child.id);
 
-                // Find spouse among siblings
-                 if (child.connections) {
+                if (child.connections) {
                     child.connections.forEach((conn: any) => {
                         if (conn.label === 'همسر' && childMap.has(conn.targetId) && !visited.has(conn.targetId)) {
                             sorted.push(childMap.get(conn.targetId));
@@ -206,7 +217,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     };
 
     recursiveSort(clonedData);
-
     return clonedData;
   };
 
@@ -238,7 +248,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       return () => window.removeEventListener('keydown', handleKeyDown);
   }, [zoomTransform]);
 
-  // Sync floating menu position (for selection)
   useEffect(() => {
       if (selectedId && nodeMapRef.current.has(selectedId) && !contextMenu) {
         const sNode = nodeMapRef.current.get(selectedId);
@@ -246,7 +255,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             const t = zoomTransform;
             const x = orientation === 'horizontal' ? sNode.y : sNode.x;
             const y = orientation === 'horizontal' ? sNode.x : sNode.y;
-            // Apply zoom transform
             const finalX = t.x + x * t.k; 
             const finalY = t.y + y * t.k;
             setSelectedNodePos({ x: finalX, y: finalY });
@@ -262,24 +270,25 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     const colors = getThemeColors(theme);
     const hasHighlight = highlightedIds.size > 0;
+    const isCompact = treeSettings?.isCompact || false;
+    const isClassicFont = treeSettings?.fontStyle === 'classic';
+    const fontFamily = isClassicFont ? '"Noto Naskh Arabic", serif' : '"Vazirmatn", sans-serif';
 
     select(svgRef.current).selectAll("*").remove();
 
-    // Organize data to keep spouses adjacent
     const organizedData = organizeData(data);
 
     const svg = select(svgRef.current)
       .attr("width", dimensions.width)
       .attr("height", dimensions.height)
       .on("click", () => {
-          setContextMenu(null); // Close context menu on bg click
-          if (selectedId) onNodeClick({} as any); // Clear selection
+          setContextMenu(null);
+          if (selectedId) onNodeClick({} as any);
       });
 
     const g = svg.append("g")
       .attr("transform", zoomTransform.toString());
 
-    // Define Zoom
     const zoom = d3Zoom<SVGSVGElement, unknown>()
         .scaleExtent([0.1, 3])
         .on("zoom", (event) => {
@@ -288,27 +297,29 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
               event.transform.y === zoomTransform.y) return;
           g.attr("transform", event.transform);
           setZoomTransform(event.transform);
-          setContextMenu(null); // Close context menu on zoom
+          setContextMenu(null);
         });
 
     svg.call(zoom);
     zoomRef.current = zoom;
 
-    // Tree Layout Configuration
+    // Node Sizes for Compact vs Normal Mode
+    const nodeWidth = isCompact ? 50 : 90;
+    const nodeHeight = isCompact ? 120 : 240;
+    const verticalNodeSize: [number, number] = isCompact ? [80, 80] : [160, 160];
+
     let treemap;
     if (orientation === 'horizontal') {
         treemap = d3Tree<FamilyMember>()
-            .nodeSize([90, 240]) 
+            .nodeSize([nodeWidth, nodeHeight]) 
             .separation((a: any, b: any) => {
-                // Check if spouses
                 const isSpouse = a.data.connections?.some((c: any) => c.targetId === b.data.id && c.label === 'همسر') ||
                                  b.data.connections?.some((c: any) => c.targetId === a.data.id && c.label === 'همسر');
-                // Closer distance for spouses
                 return isSpouse ? 0.65 : (a.parent === b.parent ? 1.1 : 2.2);
             });
     } else {
         treemap = d3Tree<FamilyMember>()
-            .nodeSize([160, 160])
+            .nodeSize(verticalNodeSize)
             .separation((a: any, b: any) => {
                 const isSpouse = a.data.connections?.some((c: any) => c.targetId === b.data.id && c.label === 'همسر') ||
                                  b.data.connections?.some((c: any) => c.targetId === a.data.id && c.label === 'همسر');
@@ -321,9 +332,100 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     const nodes = treemap(root);
 
     nodeMapRef.current.clear();
+    
+    // Assign Branch Colors & Generation Info
     nodes.descendants().forEach((d: any) => {
-      nodeMapRef.current.set(d.data.id, d);
+        // Depth Calculation for Generation Labels
+        // d.depth is already available
+
+        // Branch Coloring Logic
+        if (treeSettings?.colorMode === 'branch') {
+            if (d.depth === 0) {
+                d._branchColor = colors.nodeStroke;
+            } else if (d.depth === 1) {
+                // Assign color based on index among siblings
+                // We use the index in parent's children array
+                const index = d.parent.children.indexOf(d);
+                d._branchColor = BRANCH_COLORS[index % BRANCH_COLORS.length];
+                d._branchIndex = index;
+            } else {
+                // Inherit from parent
+                d._branchColor = d.parent._branchColor;
+                d._branchIndex = d.parent._branchIndex;
+            }
+        }
+
+        nodeMapRef.current.set(d.data.id, d);
     });
+
+    // --- Generation Labels (Background Layer) ---
+    if (treeSettings?.showGenerationLabels) {
+        const depths = new Set(nodes.descendants().map((d: any) => d.depth));
+        const depthArray = Array.from(depths).sort((a: any, b: any) => a - b);
+        
+        const labelsG = g.append("g").attr("class", "generation-labels");
+        
+        depthArray.forEach((depth: any) => {
+            if (depth === 0 && orientation === 'vertical') return; // Hide root label in vertical usually
+
+            const nodesAtDepth = nodes.descendants().filter((d: any) => d.depth === depth);
+            if (nodesAtDepth.length === 0) return;
+
+            // Find average position
+            let avgPos = 0;
+            if (orientation === 'horizontal') {
+                avgPos = nodesAtDepth[0].y; // Y in D3 tree is X on screen for horizontal
+                
+                labelsG.append("text")
+                    .attr("x", avgPos)
+                    .attr("y", -dimensions.height / 2 + 50) // Top of screen roughly
+                    .attr("text-anchor", "middle")
+                    .text(`نسل ${depth + 1}`)
+                    .style("font-family", fontFamily)
+                    .style("font-size", "24px")
+                    .style("font-weight", "bold")
+                    .style("opacity", 0.1)
+                    .style("fill", colors.text);
+                    
+                // Draw vertical line background
+                labelsG.append("line")
+                    .attr("x1", avgPos)
+                    .attr("y1", -5000)
+                    .attr("x2", avgPos)
+                    .attr("y2", 5000)
+                    .style("stroke", colors.text)
+                    .style("stroke-width", 1)
+                    .style("stroke-dasharray", "10,10")
+                    .style("opacity", 0.05);
+
+            } else {
+                avgPos = nodesAtDepth[0].y; // Y is Y on screen
+                
+                labelsG.append("text")
+                    .attr("x", -dimensions.width / 2 + 50)
+                    .attr("y", avgPos)
+                    .attr("text-anchor", "start")
+                    .attr("alignment-baseline", "middle")
+                    .text(`نسل ${depth + 1}`)
+                    .style("font-family", fontFamily)
+                    .style("font-size", "24px")
+                    .style("font-weight", "bold")
+                    .style("opacity", 0.1)
+                    .style("fill", colors.text);
+
+                // Draw horizontal line background
+                labelsG.append("line")
+                    .attr("x1", -5000)
+                    .attr("y1", avgPos)
+                    .attr("x2", 5000)
+                    .attr("y2", avgPos)
+                    .style("stroke", colors.text)
+                    .style("stroke-width", 1)
+                    .style("stroke-dasharray", "10,10")
+                    .style("opacity", 0.05);
+            }
+        });
+    }
     
     // Extra Links (Connections)
     const extraLinks: any[] = [];
@@ -346,20 +448,16 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         let s = d.source;
         let t = d.target;
         
-        // Handle Shared Children (Start from midpoint of parents)
         if (s.data.connections && s.data.connections.some((c: any) => c.label === 'همسر')) {
             const spouseConn = s.data.connections.find((c: any) => c.label === 'همسر');
             const spouseNode = nodeMapRef.current.get(spouseConn.targetId);
             if (spouseNode) {
-                 // Calculate midpoint
                  const midX = (s.x + spouseNode.x) / 2;
                  const midY = (s.y + spouseNode.y) / 2;
-                 // Temporarily override source for drawing
                  s = { x: midX, y: midY };
             }
         }
 
-        // --- Straight Style ---
         if (linkStyle === 'straight') {
              if (orientation === 'horizontal') {
                 return `M${s.y},${s.x} L${s.y},${t.x} L${t.y},${t.x}`; 
@@ -368,7 +466,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
              }
         }
 
-        // --- Step (Orthogonal) Style ---
         if (linkStyle === 'step') {
             if (orientation === 'horizontal') {
                 const midY = (s.y + t.y) / 2;
@@ -379,7 +476,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             }
         }
 
-        // --- Curved (Bezier) Style ---
         let offset = 0;
         if (preventOverlap) {
             const idVal = t.data.id ? t.data.id.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) : 0;
@@ -403,13 +499,11 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     const gContent = g.append("g");
 
-    // Filter Extra Links based on settings
     const visibleExtraLinks = extraLinks.filter(d => {
         if (d.label === 'همسر' && treeSettings && !treeSettings.showSpouseConnections) return false;
         return true;
     });
 
-    // Draw Extra Links (Connections like Spouses)
     gContent.selectAll(".extra-link")
       .data(visibleExtraLinks)
       .enter().append("path")
@@ -417,12 +511,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr("d", (d: any) => {
           const s = d.source;
           const t = d.target;
-          
-          // Calculate Euclidean distance to detect close neighbors
           const dist = Math.sqrt(Math.pow(s.x - t.x, 2) + Math.pow(s.y - t.y, 2));
           
-          // If extremely close (like sorted spouses), draw a flatter curve or straight line
-          if (dist < 180) { // Threshold for adjacent nodes
+          if (dist < 180) { 
              return orientation === 'horizontal' 
                  ? `M ${s.y} ${s.x} L ${t.y} ${t.x}` 
                  : `M ${s.x} ${s.y} L ${t.x} ${t.y}`;
@@ -442,20 +533,15 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr("stroke-dasharray", (d: any) => d.label === 'همسر' ? "0" : "5,5")
       .attr("opacity", (d: any) => {
          if (!isVisibleInTime(d.source.data) || !isVisibleInTime(d.target.data)) return 0;
-         
          if (!hasHighlight) return 0.6;
          const srcHi = highlightedIds.has(d.source.data.id);
          const tgtHi = highlightedIds.has(d.target.data.id);
          return (srcHi && tgtHi) ? 1 : 0.1;
       });
 
-    // Draw Tree Links
     const visibleLinks = nodes.links().filter((d: any) => {
         if (d.source.data.relation === 'SystemRoot') return false;
-        // Check settings for hierarchy links
         if (treeSettings && !treeSettings.showParentChildConnections) return false;
-
-        // Hide link if the target is a "moved" spouse (visual sibling, not actual child)
         // @ts-ignore
         if (d.target.data._isMoved) return false; 
         return true;
@@ -469,6 +555,12 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr("fill", "none")
       .attr("stroke", (d: any) => {
           if (hasHighlight && highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id)) return colors.selectedRing;
+          
+          // Use Branch Color for Link if enabled
+          if (treeSettings?.colorMode === 'branch' && d.target._branchColor) {
+              return d.target._branchColor;
+          }
+
           return colors.link;
       })
       .attr("stroke-width", (d: any) => {
@@ -477,13 +569,11 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       })
       .style("opacity", (d: any) => {
          if (!isVisibleInTime(d.source.data) || !isVisibleInTime(d.target.data)) return 0;
-         
          if (!hasHighlight) return 1;
          if (highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id)) return 1;
          return 0.1;
       });
 
-    // Draw Nodes
     const node = gContent.selectAll(".node")
       .data(nodes.descendants())
       .enter().append("g")
@@ -504,11 +594,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           event.preventDefault();
           event.stopPropagation();
           if(d.data.relation === 'SystemRoot') return;
-          
-          // Select the node first for visual feedback
           onNodeClick(d.data);
-          
-          // Open custom context menu
           setContextMenu({ 
               x: event.clientX, 
               y: event.clientY, 
@@ -518,22 +604,18 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .style("opacity", (d: HierarchyPointNode<FamilyMember>) => {
          if (!isVisibleInTime(d.data)) return 0.05;
          if (d.data.relation === 'SystemRoot') return 0;
-
          if (!hasHighlight) return 1;
          return highlightedIds.has(d.data.id) ? 1 : 0.2; 
       });
 
-    // Wrapper for animation
     const animatedNode = node.append("g")
       .attr("class", "animate-fade-in-scale");
 
-    // PULSE RING for Selected Node
     animatedNode.each(function(d: any) {
         if (selectedId === d.data.id) {
             const el = select(this);
-            // Ripple Ring
             el.append("circle")
-              .attr("r", 30)
+              .attr("r", isCompact ? 20 : 30)
               .attr("fill", "none")
               .attr("stroke", colors.selectedRing)
               .attr("stroke-width", "2px")
@@ -541,56 +623,56 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         }
     });
 
-    // Node Circle Background (Neutral)
     animatedNode.append("circle")
-      .attr("r", 30)
+      .attr("r", isCompact ? 20 : 30)
       .attr("fill", colors.nodeFill)
       .attr("stroke", (d: any) => {
           if (selectedId === d.data.id) return colors.selectedRing;
+          if (treeSettings?.colorMode === 'branch' && d._branchColor) return d._branchColor;
           return colors.nodeStroke;
       })
       .attr("stroke-width", (d: any) => selectedId === d.data.id ? "4px" : "2px")
       .style("filter", "drop-shadow(0px 4px 6px rgba(0,0,0,0.1))")
       .style("transition", "all 0.3s ease");
 
-    // Clip Path for Images
     const clipPathId = (d: any) => `clip-${d.data.id}`;
     animatedNode.append("clipPath")
       .attr("id", clipPathId)
       .append("circle")
-      .attr("r", 28);
+      .attr("r", isCompact ? 18 : 28);
 
-    // Node Image or Gender Icon
     animatedNode.each(function(d: HierarchyPointNode<FamilyMember>) {
         const el = select(this);
-        const shouldShowAvatar = treeSettings?.showAvatars ?? true;
+        const shouldShowAvatar = (treeSettings?.showAvatars ?? true) && !isCompact;
         
         if (d.data.imageUrl && shouldShowAvatar) {
             el.append("image")
               .attr("xlink:href", d.data.imageUrl)
-              .attr("x", -28)
-              .attr("y", -28)
-              .attr("width", 56)
-              .attr("height", 56)
+              .attr("x", isCompact ? -18 : -28)
+              .attr("y", isCompact ? -18 : -28)
+              .attr("width", isCompact ? 36 : 56)
+              .attr("height", isCompact ? 36 : 56)
               .attr("clip-path", `url(#${clipPathId(d)})`)
               .attr("preserveAspectRatio", "xMidYMid slice");
         } else {
-            // Draw Gender Icon if no image or avatars hidden
-            // Scale up for better visibility inside the 30px radius circle
-            const iconScale = 1.5; 
+            const iconScale = isCompact ? 1.0 : 1.5; 
             const iconSize = 24 * iconScale;
             const offset = -iconSize / 2;
             
-            // Determine icon and color based on gender
-            let iconPath = MALE_ICON; // Default
+            let iconPath = MALE_ICON; 
             let iconColor = colors.maleIcon;
 
-            if (d.data.gender === 'female') {
-                iconPath = FEMALE_ICON;
-                iconColor = colors.femaleIcon;
-            } else if (d.data.gender === 'other') {
-                iconPath = MALE_ICON;
-                iconColor = colors.textSecondary;
+            // Use Branch Color for Icon if no image in Branch Mode
+            if (treeSettings?.colorMode === 'branch' && d._branchColor) {
+                iconColor = d._branchColor;
+            } else {
+                if (d.data.gender === 'female') {
+                    iconPath = FEMALE_ICON;
+                    iconColor = colors.femaleIcon;
+                } else if (d.data.gender === 'other') {
+                    iconPath = MALE_ICON;
+                    iconColor = colors.textSecondary;
+                }
             }
 
             el.append("path")
@@ -599,50 +681,62 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
               .attr("transform", `translate(${offset}, ${offset}) scale(${iconScale})`);
         }
 
-        // Add Heart Icon if spouse exists (and settings allow)
         const showSpouseIcon = treeSettings?.showSpouseConnections ?? true;
         if (showSpouseIcon && d.data.connections && d.data.connections.some(c => c.label === 'همسر')) {
+             const cx = isCompact ? 14 : 22;
+             const cy = isCompact ? 14 : 22;
+             const r = isCompact ? 6 : 8;
+             const sc = isCompact ? 0.35 : 0.5;
+             const tx = isCompact ? 10 : 16;
+             const ty = isCompact ? 10 : 16;
+
              el.append("circle")
-               .attr("r", 8)
-               .attr("cx", 22)
-               .attr("cy", 22)
+               .attr("r", r)
+               .attr("cx", cx)
+               .attr("cy", cy)
                .attr("fill", colors.nodeFill)
                .attr("stroke", colors.linkSpouse)
                .attr("stroke-width", 1);
 
              el.append("g")
-               .attr("transform", "translate(16, 16) scale(0.5)")
+               .attr("transform", `translate(${tx}, ${ty}) scale(${sc})`)
                .html(`<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="${colors.linkSpouse}"/>`);
         }
     });
 
-    // Node Name
     if (treeSettings?.showLabels) {
+        const textY = isCompact ? 32 : 45;
         animatedNode.append("text")
-          .attr("dy", 45)
+          .attr("dy", textY)
           .attr("text-anchor", "middle")
           .text((d: any) => d.data.name)
-          .style("font-family", "Vazirmatn")
-          .style("font-size", "12px")
+          .style("font-family", fontFamily)
+          .style("font-size", isCompact ? "10px" : "12px")
           .style("font-weight", "bold")
           .style("fill", colors.text)
           .style("text-shadow", "0px 1px 2px rgba(255,255,255,0.8)");
     }
 
-    // Node Date
     if (treeSettings?.showDates) {
+        const dateY = isCompact ? 42 : 58;
         animatedNode.append("text")
-          .attr("dy", 58)
+          .attr("dy", dateY)
           .attr("text-anchor", "middle")
-          .text((d: any) => d.data.birthDate ? d.data.birthDate.split('/')[0] : '')
-          .style("font-family", "monospace")
+          .text((d: any) => {
+              const birth = d.data.birthDate ? d.data.birthDate.split('/')[0] : '';
+              if (treeSettings?.showAge) {
+                  const age = calculateAge(d.data.birthDate, d.data.deathDate);
+                  return birth + (age ? ` ${age}` : '');
+              }
+              return birth;
+          })
+          .style("font-family", "monospace") // Numbers look better in monospace usually, but can change
           .style("font-size", "10px")
           .style("fill", colors.textSecondary);
     }
 
   }, [data, dimensions, orientation, theme, highlightedIds, linkStyle, preventOverlap, currentYear, treeSettings]);
 
-  // Handlers
   const handleZoomIn = () => {
     if (svgRef.current && zoomRef.current) {
       select(svgRef.current).transition().call(zoomRef.current.scaleBy, 1.2);
@@ -693,7 +787,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
   const glassClass = theme === 'dark' ? 'glass-panel-dark' : 'glass-panel';
 
-  // --- Context Menu Handler Functions ---
   const handleMenuAction = (action: () => void) => {
       action();
       setContextMenu(null);
@@ -720,7 +813,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       {contextMenu && (
           <div 
             className={`fixed z-[2001] rounded-xl shadow-2xl p-2 min-w-[200px] context-menu-enter ${glassClass} border ${theme === 'dark' ? 'border-slate-700 text-slate-200' : 'border-slate-100 text-slate-700'}`}
-            style={{ top: contextMenu.y + 10, left: contextMenu.x + 10 }} // Slight offset
+            style={{ top: contextMenu.y + 10, left: contextMenu.x + 10 }}
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.preventDefault()}
           >
