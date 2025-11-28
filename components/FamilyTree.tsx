@@ -1,8 +1,18 @@
 
 import React, { useEffect, useRef, useState } from 'react';
-import * as d3 from 'd3';
+import { 
+  select, 
+  zoom as d3Zoom, 
+  zoomIdentity, 
+  tree as d3Tree, 
+  hierarchy 
+} from 'd3';
 import { FamilyMember, AppTheme } from '../types';
 import { Maximize, ZoomIn, ZoomOut, ArrowDown, ArrowRight, Heart, User, Plus, Trash2, GitBranch, GitMerge, XCircle } from 'lucide-react';
+
+// Define loose types for d3 structures to avoid compilation errors if @types/d3 is missing or incompatible
+type HierarchyPointNode<T> = any;
+type ZoomBehavior<Element, Datum> = any;
 
 // SVG Paths for Gender Icons (Material Design Style)
 const MALE_ICON = "M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z";
@@ -42,8 +52,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const svgRef = useRef<SVGSVGElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
-  const [zoomTransform, setZoomTransform] = useState(d3.zoomIdentity.translate(120, 80));
-  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const [zoomTransform, setZoomTransform] = useState(zoomIdentity.translate(120, 80));
+  const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   
   // Link styles: 'curved' (Bezier), 'step' (Orthogonal), 'straight' (Direct)
   const [linkStyle, setLinkStyle] = useState<'curved' | 'step' | 'straight'>('curved');
@@ -53,7 +63,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   // Context Menu State
   const [contextMenu, setContextMenu] = useState<{x: number, y: number, member: FamilyMember} | null>(null);
   
-  const nodeMapRef = useRef<Map<string, d3.HierarchyPointNode<FamilyMember>>>(new Map());
+  const nodeMapRef = useRef<Map<string, HierarchyPointNode<FamilyMember>>>(new Map());
 
   // Helper to extract year from date string
   const getBirthYear = (dateStr?: string): number => {
@@ -103,35 +113,99 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     }
   };
 
-  // Smart Sort: Groups spouses together in SystemRoot
+  // Enhanced organizeData to handle spouse placement
   const organizeData = (inputData: FamilyMember) => {
-    if (!inputData.children || inputData.relation !== 'SystemRoot') return inputData;
+    // Deep clone to safely manipulate for visualization
+    const clonedData = JSON.parse(JSON.stringify(inputData));
+    
+    // We only perform logic if there is a structure to traverse
+    if (!clonedData.children) return clonedData;
 
-    const orderedChildren: FamilyMember[] = [];
-    const visitedIds = new Set<string>();
+    // 1. Map all nodes to find partners deep in the tree
+    const idMap = new Map<string, any>();
+    const parentMap = new Map<string, any>();
 
-    // Map for quick lookup
-    const childMap = new Map(inputData.children.map(c => [c.id, c]));
+    const traverse = (node: any, parent: any) => {
+        idMap.set(node.id, node);
+        if (parent) parentMap.set(node.id, parent);
+        if (node.children) {
+            node.children.forEach((c: any) => traverse(c, node));
+        }
+    };
+    traverse(clonedData, null);
 
-    inputData.children.forEach(child => {
-        if (visitedIds.has(child.id)) return;
-        
-        orderedChildren.push(child);
-        visitedIds.add(child.id);
+    // 2. Identify "Floating Spouses" in SystemRoot and move them next to their deep-tree partners
+    // Only applies if the root is SystemRoot (the container for the forest)
+    if (clonedData.relation === 'SystemRoot') {
+        const rootChildren = [...(clonedData.children || [])];
+        const nodesToRemoveFromRoot = new Set<string>();
 
-        // Check for spouses in the same level (SystemRoot children)
-        if (child.connections) {
-            child.connections.forEach(conn => {
-                if (conn.label === 'همسر' && childMap.has(conn.targetId) && !visitedIds.has(conn.targetId)) {
-                    // Place spouse immediately after
-                    orderedChildren.push(childMap.get(conn.targetId)!);
-                    visitedIds.add(conn.targetId);
+        rootChildren.forEach((rootChild: any) => {
+            // Check for spouse connection
+            const spouseConn = rootChild.connections?.find((c: any) => c.label === 'همسر');
+            if (spouseConn) {
+                const partnerId = spouseConn.targetId;
+                const partner = idMap.get(partnerId);
+                const partnerParent = parentMap.get(partnerId);
+
+                // If partner exists and is NOT a direct child of SystemRoot (i.e. is deep)
+                // We verify partnerParent exists and is not SystemRoot
+                if (partner && partnerParent && partnerParent.id !== clonedData.id) {
+                    
+                    // Move rootChild to partnerParent's children
+                    if (!partnerParent.children) partnerParent.children = [];
+                    
+                    // Insert immediately after partner
+                    const idx = partnerParent.children.findIndex((c: any) => c.id === partnerId);
+                    if (idx !== -1) {
+                        partnerParent.children.splice(idx + 1, 0, rootChild);
+                    } else {
+                        partnerParent.children.push(rootChild);
+                    }
+
+                    // Mark as moved so we don't draw parent-child link later
+                    rootChild._isMoved = true;
+
+                    // Mark for removal from root
+                    nodesToRemoveFromRoot.add(rootChild.id);
+                }
+            }
+        });
+
+        // Remove moved nodes from SystemRoot
+        clonedData.children = clonedData.children.filter((c: any) => !nodesToRemoveFromRoot.has(c.id));
+    }
+
+    // 3. Recursive Sort to ensure spouses are always adjacent at every level
+    const recursiveSort = (node: any) => {
+        if (node.children && node.children.length > 0) {
+            const sorted: any[] = [];
+            const visited = new Set<string>();
+            const childMap = new Map(node.children.map((c: any) => [c.id, c]));
+
+            node.children.forEach((child: any) => {
+                if (visited.has(child.id)) return;
+                sorted.push(child);
+                visited.add(child.id);
+
+                // Find spouse among siblings
+                 if (child.connections) {
+                    child.connections.forEach((conn: any) => {
+                        if (conn.label === 'همسر' && childMap.has(conn.targetId) && !visited.has(conn.targetId)) {
+                            sorted.push(childMap.get(conn.targetId));
+                            visited.add(conn.targetId);
+                        }
+                    });
                 }
             });
+            node.children = sorted;
+            node.children.forEach(recursiveSort);
         }
-    });
+    };
 
-    return { ...inputData, children: orderedChildren };
+    recursiveSort(clonedData);
+
+    return clonedData;
   };
 
   useEffect(() => {
@@ -147,6 +221,20 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     updateDimensions();
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
+
+  // Keyboard shortcut for Space (Fit)
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          if (e.code === 'Space') {
+              const activeTag = document.activeElement?.tagName;
+              if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
+              e.preventDefault();
+              handleFit();
+          }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [zoomTransform]); // Re-bind if necessary, though handleFit uses refs
 
   // Sync floating menu position (for selection)
   useEffect(() => {
@@ -173,24 +261,24 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     const colors = getThemeColors(theme);
     const hasHighlight = highlightedIds.size > 0;
 
-    d3.select(svgRef.current).selectAll("*").remove();
+    select(svgRef.current).selectAll("*").remove();
 
     // Organize data to keep spouses adjacent
     const organizedData = organizeData(data);
 
-    const svg = d3.select(svgRef.current)
+    const svg = select(svgRef.current)
       .attr("width", dimensions.width)
       .attr("height", dimensions.height)
       .on("click", () => {
           setContextMenu(null); // Close context menu on bg click
-          if (selectedId) onNodeClick({} as any); // Optional: Clear selection on bg click (handled by parent logic via onClearSelection generally, but here for safety)
+          if (selectedId) onNodeClick({} as any); // Clear selection
       });
 
     const g = svg.append("g")
       .attr("transform", zoomTransform.toString());
 
     // Define Zoom
-    const zoom = d3.zoom<SVGSVGElement, unknown>()
+    const zoom = d3Zoom<SVGSVGElement, unknown>()
         .scaleExtent([0.1, 3])
         .on("zoom", (event) => {
           if (event.transform.k === zoomTransform.k && 
@@ -207,42 +295,39 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     // Tree Layout Configuration
     let treemap;
     if (orientation === 'horizontal') {
-        treemap = d3.tree<FamilyMember>()
+        treemap = d3Tree<FamilyMember>()
             .nodeSize([90, 240]) 
-            .separation((a, b) => {
+            .separation((a: any, b: any) => {
                 // Check if spouses
-                const isSpouse = a.data.connections?.some(c => c.targetId === b.data.id && c.label === 'همسر') ||
-                                 b.data.connections?.some(c => c.targetId === a.data.id && c.label === 'همسر');
+                const isSpouse = a.data.connections?.some((c: any) => c.targetId === b.data.id && c.label === 'همسر') ||
+                                 b.data.connections?.some((c: any) => c.targetId === a.data.id && c.label === 'همسر');
                 // Closer distance for spouses
                 return isSpouse ? 0.65 : (a.parent === b.parent ? 1.1 : 2.2);
             });
     } else {
-        treemap = d3.tree<FamilyMember>()
+        treemap = d3Tree<FamilyMember>()
             .nodeSize([160, 160])
-            .separation((a, b) => {
-                const isSpouse = a.data.connections?.some(c => c.targetId === b.data.id && c.label === 'همسر') ||
-                                 b.data.connections?.some(c => c.targetId === a.data.id && c.label === 'همسر');
+            .separation((a: any, b: any) => {
+                const isSpouse = a.data.connections?.some((c: any) => c.targetId === b.data.id && c.label === 'همسر') ||
+                                 b.data.connections?.some((c: any) => c.targetId === a.data.id && c.label === 'همسر');
                 return isSpouse ? 0.65 : (a.parent === b.parent ? 1.1 : 2.2);
             });
     }
 
-    const root = d3.hierarchy(organizedData, (d) => d.children);
+    const root = hierarchy(organizedData, (d) => d.children);
     // @ts-ignore
     const nodes = treemap(root);
 
     nodeMapRef.current.clear();
-    nodes.descendants().forEach(d => {
+    nodes.descendants().forEach((d: any) => {
       nodeMapRef.current.set(d.data.id, d);
     });
     
-    // Note: Removed manual spouse post-processing loop. 
-    // The sorting + separation logic above handles positioning natively in D3 now.
-
     // Extra Links (Connections)
     const extraLinks: any[] = [];
-    nodes.descendants().forEach(sourceNode => {
+    nodes.descendants().forEach((sourceNode: any) => {
       if (sourceNode.data.connections) {
-        sourceNode.data.connections.forEach(conn => {
+        sourceNode.data.connections.forEach((conn: any) => {
           const targetNode = nodeMapRef.current.get(conn.targetId);
           if (targetNode) {
             extraLinks.push({
@@ -316,7 +401,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
     const gContent = g.append("g");
 
-    // Draw Extra Links
+    // Draw Extra Links (Connections like Spouses)
     gContent.selectAll(".extra-link")
       .data(extraLinks)
       .enter().append("path")
@@ -356,7 +441,14 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       });
 
     // Draw Tree Links
-    const visibleLinks = nodes.links().filter(d => d.source.data.relation !== 'SystemRoot');
+    const visibleLinks = nodes.links().filter((d: any) => {
+        if (d.source.data.relation === 'SystemRoot') return false;
+        // Hide link if the target is a "moved" spouse (visual sibling, not actual child)
+        // @ts-ignore
+        if (d.target.data._isMoved) return false; 
+        return true;
+    });
+
     gContent.selectAll(".link")
       .data(visibleLinks)
       .enter().append("path")
@@ -385,17 +477,17 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr("class", "node")
       .attr("transform", (d: any) => orientation === 'horizontal' ? `translate(${d.y},${d.x})` : `translate(${d.x},${d.y})`)
       .style("cursor", "pointer")
-      .on("click", (event, d: d3.HierarchyPointNode<FamilyMember>) => {
+      .on("click", (event: any, d: HierarchyPointNode<FamilyMember>) => {
         if(d.data.relation === 'SystemRoot') return;
         event.stopPropagation();
         onNodeClick(d.data);
       })
-      .on("dblclick", (event, d: d3.HierarchyPointNode<FamilyMember>) => {
+      .on("dblclick", (event: any, d: HierarchyPointNode<FamilyMember>) => {
           if(d.data.relation === 'SystemRoot') return;
           event.stopPropagation();
           onOpenDetails(d.data);
       })
-      .on("contextmenu", (event, d: d3.HierarchyPointNode<FamilyMember>) => {
+      .on("contextmenu", (event: any, d: HierarchyPointNode<FamilyMember>) => {
           event.preventDefault();
           event.stopPropagation();
           if(d.data.relation === 'SystemRoot') return;
@@ -410,7 +502,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
               member: d.data 
           });
       })
-      .style("opacity", (d: d3.HierarchyPointNode<FamilyMember>) => {
+      .style("opacity", (d: HierarchyPointNode<FamilyMember>) => {
          if (!isVisibleInTime(d.data)) return 0.05;
          if (d.data.relation === 'SystemRoot') return 0;
          if (!hasHighlight) return 1;
@@ -437,8 +529,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr("r", 28);
 
     // Node Image or Gender Icon
-    node.each(function(d: d3.HierarchyPointNode<FamilyMember>) {
-        const el = d3.select(this);
+    node.each(function(d: HierarchyPointNode<FamilyMember>) {
+        const el = select(this);
         if (d.data.imageUrl) {
             el.append("image")
               .attr("xlink:href", d.data.imageUrl)
@@ -514,19 +606,19 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   // Handlers
   const handleZoomIn = () => {
     if (svgRef.current && zoomRef.current) {
-      d3.select(svgRef.current).transition().call(zoomRef.current.scaleBy, 1.2);
+      select(svgRef.current).transition().call(zoomRef.current.scaleBy, 1.2);
     }
   };
 
   const handleZoomOut = () => {
     if (svgRef.current && zoomRef.current) {
-      d3.select(svgRef.current).transition().call(zoomRef.current.scaleBy, 0.8);
+      select(svgRef.current).transition().call(zoomRef.current.scaleBy, 0.8);
     }
   };
 
   const handleFit = () => {
       if (!svgRef.current || !zoomRef.current) return;
-      const rootG = d3.select(svgRef.current).select('g');
+      const rootG = select(svgRef.current).select('g');
       // @ts-ignore
       const bounds = rootG.node()?.getBBox();
       if (!bounds) return;
@@ -544,13 +636,13 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       const scale = 0.85 / Math.max(bounds.width / fullWidth, bounds.height / fullHeight);
       const translate = [fullWidth / 2 - scale * midX, fullHeight / 2 - scale * midY];
 
-      d3.select(svgRef.current)
+      select(svgRef.current)
         .transition()
         .duration(750)
         .call(
             // @ts-ignore
             zoomRef.current.transform, 
-            d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale)
+            zoomIdentity.translate(translate[0], translate[1]).scale(scale)
         );
   };
 
@@ -574,7 +666,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
       {/* Floating Toolbar */}
       <div className={`absolute bottom-6 right-6 flex flex-col gap-2 p-2 rounded-xl shadow-xl transition-all ${glassClass}`}>
-        <button onClick={handleFit} className="p-2 rounded-lg hover:bg-teal-500/20 text-teal-600 transition-colors" title="وسط چین"><Maximize size={20} /></button>
+        <button onClick={handleFit} className="p-2 rounded-lg hover:bg-teal-500/20 text-teal-600 transition-colors" title="وسط چین (Space)"><Maximize size={20} /></button>
         <button onClick={handleZoomIn} className="p-2 rounded-lg hover:bg-teal-500/20 text-teal-600 transition-colors"><ZoomIn size={20} /></button>
         <button onClick={handleZoomOut} className="p-2 rounded-lg hover:bg-teal-500/20 text-teal-600 transition-colors"><ZoomOut size={20} /></button>
         <div className="h-px bg-slate-300 dark:bg-slate-600 my-1 mx-2"></div>

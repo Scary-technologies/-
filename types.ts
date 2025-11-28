@@ -1,6 +1,4 @@
 
-import type { HierarchyPointNode } from 'd3';
-
 export interface Connection {
   targetId: string;
   label: string;
@@ -46,7 +44,15 @@ export interface FamilyMember {
   connections?: Connection[];
 }
 
-export interface TreeNode extends HierarchyPointNode<FamilyMember> {
+// Decoupled from d3 to avoid import errors
+export interface TreeNode {
+  x: number;
+  y: number;
+  data: FamilyMember;
+  parent?: TreeNode | null;
+  children?: TreeNode[] | null;
+  depth?: number;
+  height?: number;
   x0?: number;
   y0?: number;
 }
