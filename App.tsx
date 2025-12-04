@@ -1280,16 +1280,15 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="flex justify-center gap-4">
-                     <a href="#" className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                     <a href="https://github.com/Scary-technologies/-" className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                          <Github size={18}/> <span className="text-xs font-bold">گیت‌هاب</span>
                      </a>
-                     <a href="#" className="flex items-center gap-2 px-4 py-2 rounded-xl bg-pink-50 dark:bg-pink-900/20 text-pink-600 hover:bg-pink-100 dark:hover:bg-pink-900/40 transition-colors">
-                         <Heart size={18}/> <span className="text-xs font-bold">حمایت مالی</span>
-                     </a>
+
                 </div>
                 
                 <div className="mt-8 text-center text-[10px] opacity-40">
-                    نسخه 2.1.0 • طراحی شده با عشق ❤️
+                    با تشکر از 🌞 برای نام گذاری و بهبود برنامه 
+                    نسخه 2.1.0 • طراحی شده با عشق تقدیم به پدرم کریم میرشاهی ❤️
                 </div>
             </div>
         </div>
