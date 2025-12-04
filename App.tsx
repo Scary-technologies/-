@@ -3,7 +3,8 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react'
 import { FamilyMember, AppTheme, TreeSettings } from './types';
 import FamilyTree from './components/FamilyTree';
 import MemberPanel from './components/MemberPanel';
-import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, CheckCircle2, RefreshCcw, Plus, Moon, ListFilter, Clock, ScanEye, ArrowUpFromLine, ArrowDownToLine, RotateCcw, Keyboard, Command, AlertTriangle, Info, CheckCircle, SlidersHorizontal, Eye, EyeOff, Type, Layers, Timer, Printer, GitBranch, GitMerge, Layout, User } from 'lucide-react';
+import { dbService, DbMode } from './services/dbService';
+import { Menu, X, Search, Download, Upload, Palette, Maximize, Minimize, Save, CheckCircle2, RefreshCcw, Plus, Moon, ListFilter, Clock, ScanEye, ArrowUpFromLine, ArrowDownToLine, RotateCcw, Keyboard, Command, AlertTriangle, Info, CheckCircle, SlidersHorizontal, Eye, EyeOff, Type, Layers, Timer, Printer, GitBranch, GitMerge, Layout, User, Github, Heart, Database, Wifi, WifiOff, Globe, HardDrive } from 'lucide-react';
 
 // Historical Context Data
 const historicalEvents = [
@@ -201,8 +202,7 @@ const flattenTree = (node: FamilyMember): FamilyMember[] => {
 
 // --- MAIN COMPONENT ---
 
-// This key acts as the "filename" in the browser's local database
-const STORAGE_KEY = 'niyakan_family_tree_db_json';
+const LEGACY_STORAGE_KEY = 'niyakan_family_tree_db_json';
 
 const App: React.FC = () => {
   const [treeData, setTreeData] = useState<FamilyMember>(defaultFamilyData);
@@ -210,6 +210,13 @@ const App: React.FC = () => {
   // Selection & Modal State
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [detailsMember, setDetailsMember] = useState<FamilyMember | null>(null);
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
+
+  // Database Config State
+  const [isDbConfigOpen, setIsDbConfigOpen] = useState(false);
+  const [dbMode, setDbMode] = useState<DbMode>('local');
+  const [dbApiUrl, setDbApiUrl] = useState('');
+  const [dbConnectionStatus, setDbConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
 
   // UI State
   const [searchQuery, setSearchQuery] = useState('');
@@ -267,38 +274,90 @@ const App: React.FC = () => {
       document.body.className = `theme-${theme}`;
   }, [theme]);
 
-  // Auto Load (Simulating loading the JSON DB file on startup)
+  // Load Database Settings & Data
   useEffect(() => {
-      const savedData = localStorage.getItem(STORAGE_KEY);
-      if (savedData) {
+      // 1. Load Settings
+      const savedMode = dbService.getMode();
+      setDbMode(savedMode);
+      setDbApiUrl(dbService.getApiUrl());
+
+      // 2. Load Data
+      const loadData = async () => {
           try {
-              const parsed = JSON.parse(savedData);
-              if (parsed && (parsed.id || parsed.children)) {
-                  setTreeData(parsed);
-                  console.log('Database loaded successfully');
+              const loadedData = await dbService.loadTree();
+              if (loadedData && (loadedData.id || loadedData.children)) {
+                  setTreeData(loadedData);
+                  console.log(`Database loaded (${savedMode})`);
+                  return;
+              }
+
+              // Fallback to Legacy LocalStorage if no DB data found
+              const localData = localStorage.getItem(LEGACY_STORAGE_KEY);
+              if (localData) {
+                  const parsed = JSON.parse(localData);
+                  if (parsed && (parsed.id || parsed.children)) {
+                      setTreeData(parsed);
+                  }
               }
           } catch (e) {
               console.error('Failed to load database', e);
+              if (savedMode === 'remote') {
+                  alert("خطا در اتصال به سرور دیتابیس. لطفا تنظیمات اتصال را بررسی کنید.");
+                  setIsDbConfigOpen(true);
+              }
           }
-      }
+      };
+      loadData();
   }, []);
 
-  // Real-time Auto Save (Simulating writing to JSON DB file)
+  // Real-time Auto Save
   useEffect(() => {
       setSaveStatus('saving');
-      // Reduced delay to 500ms for "Real-time" (Bi-derang) feel
-      const timer = setTimeout(() => {
+      const timer = setTimeout(async () => {
           try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(treeData));
+              await dbService.saveTree(treeData);
               setSaveStatus('saved');
           } catch (e) {
               setSaveStatus('unsaved');
               console.error('Database write failed', e);
           }
-      }, 500);
+      }, 1500); // Increased debounce for remote calls
 
       return () => clearTimeout(timer);
   }, [treeData]);
+
+  const handleSaveDbConfig = async () => {
+      setDbConnectionStatus('testing');
+      if (dbMode === 'remote') {
+          const isConnected = await dbService.testConnection(dbApiUrl);
+          if (!isConnected) {
+              setDbConnectionStatus('failed');
+              return;
+          }
+      }
+
+      setDbConnectionStatus('success');
+      dbService.setMode(dbMode);
+      dbService.setApiUrl(dbApiUrl);
+      
+      // Reload data from the new source
+      try {
+          const newData = await dbService.loadTree();
+          if (newData) {
+              setTreeData(newData);
+          } else {
+              // If new source is empty, we might want to keep current data and save it there?
+              // For safety, let's prompt or just save current data to new source
+              await dbService.saveTree(treeData);
+          }
+          setTimeout(() => {
+              setIsDbConfigOpen(false);
+              setDbConnectionStatus('idle');
+          }, 1000);
+      } catch (e) {
+          alert("خطا در همگام‌سازی با دیتابیس جدید.");
+      }
+  };
 
   const allMembers = useMemo(() => flattenTree(treeData), [treeData]);
 
@@ -666,6 +725,8 @@ const App: React.FC = () => {
          if (isFilterPanelOpen) { setIsFilterPanelOpen(false); return; }
          if (isFocusMenuOpen) { setIsFocusMenuOpen(false); return; }
          if (isTreeSettingsOpen) { setIsTreeSettingsOpen(false); return; }
+         if (isAboutOpen) { setIsAboutOpen(false); return; }
+         if (isDbConfigOpen) { setIsDbConfigOpen(false); return; }
          if (selectedNodeId) { setSelectedNodeId(null); return; }
       }
 
@@ -714,7 +775,7 @@ const App: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNodeId, detailsMember, isShortcutsOpen, isSearchOpen, isFilterPanelOpen, isFocusMenuOpen, isTreeSettingsOpen, treeData]);
+  }, [selectedNodeId, detailsMember, isShortcutsOpen, isSearchOpen, isFilterPanelOpen, isFocusMenuOpen, isTreeSettingsOpen, isAboutOpen, isDbConfigOpen, treeData]);
 
 
   const glassClass = theme === 'dark' ? 'glass-panel-dark' : 'glass-panel';
@@ -1015,10 +1076,19 @@ const App: React.FC = () => {
         
         <div className="flex gap-3 items-center">
            
+           {/* Database Config Toggle */}
+           <button 
+             onClick={() => setIsDbConfigOpen(true)}
+             className={`p-2 rounded-lg border transition-all flex items-center gap-2 ${dbMode === 'remote' ? 'bg-indigo-500 text-white border-indigo-500' : (theme === 'dark' ? 'bg-slate-800/50 border-slate-700 hover:text-white' : 'bg-white/40 border-white/50 hover:bg-white/60')}`}
+             title="تنظیمات دیتابیس (MongoDB / Local)"
+           >
+               {dbMode === 'remote' ? <Globe size={18} /> : <HardDrive size={18} />}
+           </button>
+
            {/* Keyboard Shortcuts Toggle */}
            <button 
              onClick={() => setIsShortcutsOpen(!isShortcutsOpen)}
-             className={`p-2 rounded-lg border transition-all ${isShortcutsOpen ? 'bg-teal-500 text-white border-teal-500' : (theme === 'dark' ? 'bg-slate-800/50 border-slate-700 hover:text-white' : 'bg-white/40 border-white/50 hover:bg-white/60')}`}
+             className={`p-2 rounded-lg border transition-all hidden sm:block ${isShortcutsOpen ? 'bg-teal-500 text-white border-teal-500' : (theme === 'dark' ? 'bg-slate-800/50 border-slate-700 hover:text-white' : 'bg-white/40 border-white/50 hover:bg-white/60')}`}
              title="میانبرهای صفحه کلید (?)"
            >
                <Keyboard size={18} />
@@ -1031,6 +1101,15 @@ const App: React.FC = () => {
              title="مرور زمان"
            >
                <Clock size={18} />
+           </button>
+           
+           {/* About Button (New) */}
+           <button 
+             onClick={() => setIsAboutOpen(true)}
+             className={`p-2 rounded-lg border transition-all ${isAboutOpen ? 'bg-teal-500 text-white border-teal-500' : (theme === 'dark' ? 'bg-slate-800/50 border-slate-700 hover:text-white' : 'bg-white/40 border-white/50 hover:bg-white/60')}`}
+             title="درباره ما"
+           >
+               <Info size={18} />
            </button>
 
            {/* Theme Toggles */}
@@ -1049,8 +1128,8 @@ const App: React.FC = () => {
 
            {/* File Controls */}
            <div className={`flex p-1 rounded-lg border hidden sm:flex ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-white/40 border-white/50'}`}>
-               <button onClick={handleExportJSON} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100 text-blue-600" title="دانلود فایل JSON"><Download size={18} /></button>
-               <button onClick={handleImportClick} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100 text-teal-600" title="بارگذاری فایل JSON"><Upload size={18} /></button>
+               <button onClick={handleExportJSON} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100 text-blue-600" title="ذخیره به صورت فایل (JSON)"><Download size={18} /></button>
+               <button onClick={handleImportClick} className="p-2 rounded-md transition-all hover:bg-white/50 hover:shadow-sm opacity-70 hover:opacity-100 text-teal-600" title="بارگذاری فایل (JSON)"><Upload size={18} /></button>
            </div>
         </div>
       </header>
@@ -1097,6 +1176,123 @@ const App: React.FC = () => {
                   <span>{maxYear}</span>
               </div>
           </div>
+      )}
+
+      {/* Database Configuration Modal */}
+      {isDbConfigOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-pop-in" onClick={() => setIsDbConfigOpen(false)}>
+              <div className={`w-full max-w-md p-6 rounded-2xl shadow-2xl relative ${theme === 'dark' ? 'bg-slate-900 border border-slate-700 text-slate-200' : 'bg-white text-slate-800'}`} onClick={(e) => e.stopPropagation()}>
+                  <button onClick={() => setIsDbConfigOpen(false)} className="absolute top-4 left-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"><X size={20}/></button>
+                  
+                  <div className="flex items-center gap-3 mb-6">
+                      <div className="bg-indigo-500 text-white p-3 rounded-xl"><Database size={24}/></div>
+                      <div>
+                          <h3 className="text-lg font-bold">تنظیمات پایگاه داده</h3>
+                          <p className="text-xs opacity-60">محل ذخیره‌سازی اطلاعات شجره‌نامه را انتخاب کنید</p>
+                      </div>
+                  </div>
+
+                  <div className="space-y-4">
+                      {/* Mode Selection */}
+                      <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                          <button 
+                            onClick={() => setDbMode('local')}
+                            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${dbMode === 'local' ? 'bg-white dark:bg-slate-700 shadow text-teal-600' : 'opacity-60'}`}
+                          >
+                              <HardDrive size={16}/> مرورگر (Local)
+                          </button>
+                          <button 
+                            onClick={() => setDbMode('remote')}
+                            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${dbMode === 'remote' ? 'bg-white dark:bg-slate-700 shadow text-indigo-500' : 'opacity-60'}`}
+                          >
+                              <Globe size={16}/> سرور (MongoDB)
+                          </button>
+                      </div>
+
+                      {/* Remote Config Details */}
+                      {dbMode === 'remote' && (
+                          <div className="animate-slide-up space-y-3">
+                              <div>
+                                  <label className="text-xs font-bold opacity-70 block mb-1">آدرس API سرور</label>
+                                  <input 
+                                    className={`w-full p-3 rounded-xl border outline-none text-left font-mono text-sm ${theme === 'dark' ? 'bg-slate-800 border-slate-600' : 'bg-slate-50 border-slate-200'}`}
+                                    placeholder="http://localhost:5000/api/tree"
+                                    value={dbApiUrl}
+                                    onChange={(e) => setDbApiUrl(e.target.value)}
+                                  />
+                                  <p className="text-[10px] opacity-50 mt-1">سرور باید دارای اندپوینت‌های GET و POST باشد.</p>
+                              </div>
+                              
+                              <div className="p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 rounded-xl text-xs text-amber-700 dark:text-amber-400">
+                                  <AlertTriangle size={14} className="inline mb-1 ml-1"/>
+                                  برای اتصال به MongoDB، شما نیاز به اجرای یک Backend (مانند Node.js/Express) دارید که درخواست‌ها را از این آدرس دریافت کند.
+                              </div>
+                          </div>
+                      )}
+
+                      <button 
+                        onClick={handleSaveDbConfig}
+                        disabled={dbConnectionStatus === 'testing'}
+                        className={`w-full py-3 mt-4 rounded-xl font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2 ${dbMode === 'remote' ? 'bg-indigo-500 hover:bg-indigo-600' : 'bg-teal-500 hover:bg-teal-600'} ${dbConnectionStatus === 'testing' ? 'opacity-70 cursor-wait' : ''}`}
+                      >
+                          {dbConnectionStatus === 'testing' ? <RefreshCcw className="animate-spin"/> : (dbMode === 'remote' ? <Wifi/> : <Save/>)}
+                          {dbConnectionStatus === 'testing' ? 'در حال تست اتصال...' : 'ذخیره و اعمال تنظیمات'}
+                      </button>
+
+                      {dbConnectionStatus === 'failed' && (
+                          <div className="text-center text-xs text-red-500 font-bold animate-pulse">
+                              خطا در اتصال به سرور! لطفا آدرس را بررسی کنید.
+                          </div>
+                      )}
+                      {dbConnectionStatus === 'success' && (
+                          <div className="text-center text-xs text-green-500 font-bold">
+                              اتصال با موفقیت برقرار شد.
+                          </div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* About Us Modal */}
+      {isAboutOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-pop-in" onClick={() => setIsAboutOpen(false)}>
+            <div className={`w-full max-w-md p-8 rounded-3xl shadow-2xl relative ${theme === 'dark' ? 'bg-slate-900/95 border border-slate-700 text-slate-200' : 'bg-white/95 text-slate-800'}`} onClick={(e) => e.stopPropagation()}>
+                <button onClick={() => setIsAboutOpen(false)} className="absolute top-4 left-4 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"><X size={20}/></button>
+                
+                <div className="text-center mb-6">
+                    <div className="w-20 h-20 bg-gradient-to-br from-teal-400 to-teal-700 rounded-3xl mx-auto shadow-xl flex items-center justify-center text-4xl mb-4">🌳</div>
+                    <h2 className="text-2xl font-black mb-1">نیاکان</h2>
+                    <p className="text-sm opacity-60">سازنده شجره‌نامه خانوادگی هوشمند</p>
+                </div>
+
+                <div className="space-y-4 text-sm leading-relaxed opacity-80 mb-8 text-center">
+                    <p>
+                        این برنامه با هدف ساده‌سازی فرآیند ثبت و نگهداری تاریخچه خانوادگی طراحی شده است. 
+                        با استفاده از تکنولوژی‌های مدرن وب، شما می‌توانید شجره‌نامه‌ای تعاملی، زیبا و ماندگار بسازید.
+                    </p>
+                    <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-xl text-xs text-justify border border-slate-200 dark:border-slate-700">
+                        <strong>نکته مهم ذخیره‌سازی:</strong><br/>
+                        اطلاعات شما به صورت خودکار در حافظه مرورگر (IndexedDB) ذخیره می‌شود. برای تهیه نسخه پشتیبان دائمی، حتماً از دکمه 
+                        <span className="inline-flex items-center gap-1 mx-1 text-blue-500 font-bold"><Download size={10}/> دانلود فایل</span>
+                        در نوار ابزار بالا استفاده کنید و فایل JSON را نزد خود نگه دارید.
+                    </div>
+                </div>
+
+                <div className="flex justify-center gap-4">
+                     <a href="#" className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                         <Github size={18}/> <span className="text-xs font-bold">گیت‌هاب</span>
+                     </a>
+                     <a href="#" className="flex items-center gap-2 px-4 py-2 rounded-xl bg-pink-50 dark:bg-pink-900/20 text-pink-600 hover:bg-pink-100 dark:hover:bg-pink-900/40 transition-colors">
+                         <Heart size={18}/> <span className="text-xs font-bold">حمایت مالی</span>
+                     </a>
+                </div>
+                
+                <div className="mt-8 text-center text-[10px] opacity-40">
+                    نسخه 2.1.0 • طراحی شده با عشق ❤️
+                </div>
+            </div>
+        </div>
       )}
 
       {/* Shortcuts Help Modal */}
