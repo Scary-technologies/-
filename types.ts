@@ -81,13 +81,6 @@ export interface TreeSettings {
   // Layout & Links
   linkStyle: 'curved' | 'step' | 'straight';
   preventOverlap: boolean;
-  // Advanced Styling
-  nodeShape: 'circle' | 'rect';
-  siblingSpacing: number; // Multiplier: 0.5 to 2.0
-  levelSpacing: number; // Pixel value: 100 to 400
-  enableShadows: boolean;
-  showTags: boolean;
-  showConnectionLabels: boolean;
 }
 
 export type AppTheme = 'modern' | 'dark';
