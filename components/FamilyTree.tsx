@@ -6,29 +6,28 @@ import {
   zoomIdentity, 
   tree as d3Tree, 
   hierarchy,
-  schemeCategory10,
   easeQuadOut,
   easeElasticOut
 } from 'd3';
 import { FamilyMember, AppTheme, TreeSettings } from '../types';
-import { Maximize, ZoomIn, ZoomOut, ArrowDown, ArrowRight, Heart, User, Plus, Trash2, GitBranch, GitMerge, XCircle } from 'lucide-react';
+import { ZoomIn, ZoomOut, ArrowDown, ArrowRight, User, Plus, Trash2, GitBranch, GitMerge, XCircle, Heart } from 'lucide-react';
 
-// Define loose types for d3 structures to avoid compilation errors if @types/d3 is missing or incompatible
+// Define loose types for d3 structures
 type HierarchyPointNode<T> = any;
 type ZoomBehavior<Element, Datum> = any;
 
-// SVG Paths for Gender Icons (Material Design Style)
+// SVG Paths for Gender Icons
 const MALE_ICON = "M12,4A4,4 0 0,1 16,8A4,4 0 0,1 12,12A4,4 0 0,1 8,8A4,4 0 0,1 12,4M12,14C16.42,14 20,15.79 20,18V20H4V18C4,15.79 7.58,14 12,14Z";
 const FEMALE_ICON = "M12,4A4,4 0 0,1 16,8C16,9.95 14.6,11.58 12.75,11.93L12.75,12.09C12.75,12.09 16,13.67 16,18V20H8V18C8,13.9 11.25,12.09 11.25,12.09L11.25,11.93C9.4,11.58 8,9.95 8,8A4,4 0 0,1 12,4Z";
 
-// Branch Colors Palette (Teal, Amber, Rose, Indigo, Cyan, Violet)
+// Branch Colors Palette
 const BRANCH_COLORS = ['#0d9488', '#d97706', '#e11d48', '#4f46e5', '#0891b2', '#7c3aed'];
 
 interface FamilyTreeProps {
   data: FamilyMember;
-  onNodeClick: (member: FamilyMember) => void;
+  onNodeClick: (member: FamilyMember, event: React.MouseEvent) => void;
   onOpenDetails: (member: FamilyMember) => void;
-  selectedId?: string | null;
+  selectedIds: Set<string>;
   orientation: 'horizontal' | 'vertical';
   onOrientationChange: (orientation: 'horizontal' | 'vertical') => void;
   theme: AppTheme;
@@ -46,7 +45,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   data, 
   onNodeClick, 
   onOpenDetails,
-  selectedId, 
+  selectedIds, 
   orientation,
   onOrientationChange,
   theme,
@@ -66,8 +65,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   const zoomRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   
   const [selectedNodePos, setSelectedNodePos] = useState<{x: number, y: number} | null>(null);
-  
-  // Context Menu State
   const [contextMenu, setContextMenu] = useState<{x: number, y: number, member: FamilyMember} | null>(null);
   
   const nodeMapRef = useRef<Map<string, HierarchyPointNode<FamilyMember>>>(new Map());
@@ -85,24 +82,18 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       const bYear = getBirthYear(birthDate);
       if (bYear === -1) return '';
 
-      // If dead
       if (deathDate) {
           const dYear = getBirthYear(deathDate);
-          if (dYear !== -1) return `(${dYear - bYear} سال)`;
-          return '(فوت شده)';
+          if (dYear !== -1) return `(${dYear - bYear})`;
+          return '†';
       }
-
-      // If alive, use current system year (approximate Persian year logic)
       const now = new Date();
-      // Simple approx: Gregorian Year - 621 = Shamsi Year
       const currentShamsiYear = currentYear || (now.getFullYear() - 621);
-      
       const age = currentShamsiYear - bYear;
       if (age < 0) return '';
-      return `(${age} ساله)`;
+      return `(${age})`;
   };
 
-  // Helper to check visibility based on time-lapse
   const isVisibleInTime = (d: FamilyMember) => {
       if (!currentYear) return true;
       const year = getBirthYear(d.birthDate);
@@ -123,7 +114,8 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           text: '#f1f5f9',
           textSecondary: '#94a3b8',
           nodeStroke: '#334155',
-          selectedRing: '#2dd4bf'
+          selectedRing: '#2dd4bf',
+          shadow: 'rgba(0,0,0,0.5)'
         };
       case 'modern':
       default:
@@ -137,20 +129,17 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           text: '#1e293b',
           textSecondary: '#64748b',
           nodeStroke: '#e2e8f0',
-          selectedRing: '#0f766e'
+          selectedRing: '#0f766e',
+          shadow: 'rgba(0,0,0,0.1)'
         };
     }
   };
 
-  // Enhanced organizeData to handle spouse placement
+  // Organize Data (Spouse Logic)
   const organizeData = (inputData: FamilyMember) => {
-    // Deep clone to safely manipulate for visualization
     const clonedData = JSON.parse(JSON.stringify(inputData));
-    
-    // We only perform logic if there is a structure to traverse
     if (!clonedData.children) return clonedData;
 
-    // 1. Map all nodes to find partners deep in the tree
     const idMap = new Map<string, any>();
     const parentMap = new Map<string, any>();
 
@@ -163,7 +152,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     };
     traverse(clonedData, null);
 
-    // 2. Identify "Floating Spouses" in SystemRoot and move them next to their deep-tree partners
     if (clonedData.relation === 'SystemRoot') {
         const rootChildren = [...(clonedData.children || [])];
         const nodesToRemoveFromRoot = new Set<string>();
@@ -172,10 +160,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             const spouseConn = rootChild.connections?.find((c: any) => c.label === 'همسر');
             if (spouseConn) {
                 const partnerId = spouseConn.targetId;
-                const partner = idMap.get(partnerId);
                 const partnerParent = parentMap.get(partnerId);
 
-                if (partner && partnerParent && partnerParent.id !== clonedData.id) {
+                if (partnerParent && partnerParent.id !== clonedData.id) {
                     if (!partnerParent.children) partnerParent.children = [];
                     const idx = partnerParent.children.findIndex((c: any) => c.id === partnerId);
                     if (idx !== -1) {
@@ -191,7 +178,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         clonedData.children = clonedData.children.filter((c: any) => !nodesToRemoveFromRoot.has(c.id));
     }
 
-    // 3. Recursive Sort to ensure spouses are always adjacent
     const recursiveSort = (node: any) => {
         if (node.children && node.children.length > 0) {
             const sorted: any[] = [];
@@ -235,7 +221,6 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
-  // Keyboard shortcut for Space (Fit)
   useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
           if (e.code === 'Space') {
@@ -250,8 +235,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
   }, [zoomTransform]);
 
   useEffect(() => {
-      if (selectedId && nodeMapRef.current.has(selectedId) && !contextMenu) {
-        const sNode = nodeMapRef.current.get(selectedId);
+      const lastSelectedId = Array.from(selectedIds).pop();
+      if (lastSelectedId && nodeMapRef.current.has(lastSelectedId) && !contextMenu) {
+        const sNode = nodeMapRef.current.get(lastSelectedId);
         if (sNode) {
             const t = zoomTransform;
             const x = orientation === 'horizontal' ? sNode.y : sNode.x;
@@ -263,16 +249,15 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       } else {
         setSelectedNodePos(null);
       }
-  }, [selectedId, zoomTransform, orientation, dimensions, contextMenu]);
+  }, [selectedIds, zoomTransform, orientation, dimensions, contextMenu]);
 
-  // Main Graph Drawing
+  // --- D3 Drawing Logic ---
   useEffect(() => {
     if (!data || !svgRef.current) return;
 
     const colors = getThemeColors(theme);
     const hasHighlight = highlightedIds.size > 0;
     
-    // Deconstruct settings
     const { 
         isCompact, 
         fontStyle, 
@@ -285,23 +270,27 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         showDates, 
         showAge,
         linkStyle,
-        preventOverlap 
+        preventOverlap,
+        // New Settings
+        nodeShape,
+        siblingSpacing,
+        levelSpacing,
+        enableShadows,
+        showTags,
+        showConnectionLabels
     } = treeSettings;
 
     const isClassicFont = fontStyle === 'classic';
     const fontFamily = isClassicFont ? '"Noto Naskh Arabic", serif' : '"Vazirmatn", sans-serif';
+    const isRect = nodeShape === 'rect';
 
     select(svgRef.current).selectAll("*").remove();
-
     const organizedData = organizeData(data);
 
     const svg = select(svgRef.current)
       .attr("width", dimensions.width)
       .attr("height", dimensions.height)
-      .on("click", () => {
-          setContextMenu(null);
-          if (selectedId) onNodeClick({} as any);
-      });
+      .on("click", () => setContextMenu(null));
 
     const g = svg.append("g")
       .attr("transform", zoomTransform.toString());
@@ -320,144 +309,65 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
     svg.call(zoom);
     zoomRef.current = zoom;
 
-    // Node Sizes for Compact vs Normal Mode
-    const nodeWidth = isCompact ? 50 : 90;
-    const nodeHeight = isCompact ? 120 : 240;
-    const verticalNodeSize: [number, number] = isCompact ? [80, 80] : [160, 160];
+    // --- Dynamic Sizing ---
+    const baseNodeWidth = isRect ? 140 : (isCompact ? 50 : 90);
+    const baseNodeHeight = isRect ? 70 : (isCompact ? 120 : 240); // Used for nodeSize calculation
+    const separationFactor = siblingSpacing || 1.2;
+    const levelDistance = levelSpacing || (isCompact ? 120 : 180);
 
     let treemap;
+    // nodeSize is [width, height]
+    const effectiveNodeSize: [number, number] = orientation === 'horizontal' 
+        ? [baseNodeHeight * 0.5, levelDistance]  // In horizontal, y is depth
+        : [baseNodeWidth * separationFactor, levelDistance];
+
     if (orientation === 'horizontal') {
         treemap = d3Tree<FamilyMember>()
-            .nodeSize([nodeWidth, nodeHeight]) 
+            .nodeSize([isRect ? 90 : baseNodeWidth * separationFactor, levelDistance]) 
             .separation((a: any, b: any) => {
-                const isSpouse = a.data.connections?.some((c: any) => c.targetId === b.data.id && c.label === 'همسر') ||
-                                 b.data.connections?.some((c: any) => c.targetId === a.data.id && c.label === 'همسر');
-                return isSpouse ? 0.65 : (a.parent === b.parent ? 1.1 : 2.2);
+                // Determine if siblings or cousins
+                const isSpouse = a.data.connections?.some((c: any) => c.targetId === b.data.id && c.label === 'همسر');
+                let sep = isSpouse ? 0.75 : (a.parent === b.parent ? 1.1 : 1.4);
+                return sep * separationFactor; 
             });
     } else {
         treemap = d3Tree<FamilyMember>()
-            .nodeSize(verticalNodeSize)
+            .nodeSize([baseNodeWidth, levelDistance])
             .separation((a: any, b: any) => {
-                const isSpouse = a.data.connections?.some((c: any) => c.targetId === b.data.id && c.label === 'همسر') ||
-                                 b.data.connections?.some((c: any) => c.targetId === a.data.id && c.label === 'همسر');
-                return isSpouse ? 0.65 : (a.parent === b.parent ? 1.1 : 2.2);
+                const isSpouse = a.data.connections?.some((c: any) => c.targetId === b.data.id && c.label === 'همسر');
+                let sep = isSpouse ? 0.75 : (a.parent === b.parent ? 1.1 : 1.4);
+                return sep * separationFactor;
             });
     }
 
     const root = hierarchy(organizedData, (d) => d.children);
     // @ts-ignore
     const nodes = treemap(root);
-
     nodeMapRef.current.clear();
     
-    // Assign Branch Colors & Generation Info
+    // Assign Colors & Map
     nodes.descendants().forEach((d: any) => {
-        // Branch Coloring Logic
         if (colorMode === 'branch') {
             if (d.depth === 0) {
                 d._branchColor = colors.nodeStroke;
             } else if (d.depth === 1) {
-                // Assign color based on index among siblings
                 const index = d.parent.children.indexOf(d);
                 d._branchColor = BRANCH_COLORS[index % BRANCH_COLORS.length];
                 d._branchIndex = index;
             } else {
-                // Inherit from parent
                 d._branchColor = d.parent._branchColor;
                 d._branchIndex = d.parent._branchIndex;
             }
         }
-
         nodeMapRef.current.set(d.data.id, d);
     });
 
-    // --- Generation Labels (Background Layer) ---
-    if (showGenerationLabels) {
-        const depths = new Set(nodes.descendants().map((d: any) => d.depth));
-        const depthArray = Array.from(depths).sort((a: any, b: any) => a - b);
-        
-        const labelsG = g.append("g").attr("class", "generation-labels");
-        
-        depthArray.forEach((depth: any) => {
-            if (depth === 0) return;
-
-            const nodesAtDepth = nodes.descendants().filter((d: any) => d.depth === depth);
-            if (nodesAtDepth.length === 0) return;
-
-            let avgPos = 0;
-            if (orientation === 'horizontal') {
-                avgPos = nodesAtDepth[0].y; 
-                
-                labelsG.append("text")
-                    .attr("x", avgPos)
-                    .attr("y", -dimensions.height / 2 + 50)
-                    .attr("text-anchor", "middle")
-                    .text(`نسل ${depth}`)
-                    .style("font-family", fontFamily)
-                    .style("font-size", "24px")
-                    .style("font-weight", "bold")
-                    .style("opacity", 0.1)
-                    .style("fill", colors.text);
-                    
-                labelsG.append("line")
-                    .attr("x1", avgPos)
-                    .attr("y1", -5000)
-                    .attr("x2", avgPos)
-                    .attr("y2", 5000)
-                    .style("stroke", colors.text)
-                    .style("stroke-width", 1)
-                    .style("stroke-dasharray", "10,10")
-                    .style("opacity", 0.05);
-
-            } else {
-                avgPos = nodesAtDepth[0].y; 
-                
-                labelsG.append("text")
-                    .attr("x", -dimensions.width / 2 + 50)
-                    .attr("y", avgPos)
-                    .attr("text-anchor", "start")
-                    .attr("alignment-baseline", "middle")
-                    .text(`نسل ${depth}`)
-                    .style("font-family", fontFamily)
-                    .style("font-size", "24px")
-                    .style("font-weight", "bold")
-                    .style("opacity", 0.1)
-                    .style("fill", colors.text);
-
-                labelsG.append("line")
-                    .attr("x1", -5000)
-                    .attr("y1", avgPos)
-                    .attr("x2", 5000)
-                    .attr("y2", avgPos)
-                    .style("stroke", colors.text)
-                    .style("stroke-width", 1)
-                    .style("stroke-dasharray", "10,10")
-                    .style("opacity", 0.05);
-            }
-        });
-    }
-    
-    // Extra Links (Connections)
-    const extraLinks: any[] = [];
-    nodes.descendants().forEach((sourceNode: any) => {
-      if (sourceNode.data.connections) {
-        sourceNode.data.connections.forEach((conn: any) => {
-          const targetNode = nodeMapRef.current.get(conn.targetId);
-          if (targetNode) {
-            extraLinks.push({
-              source: sourceNode,
-              target: targetNode,
-              label: conn.label
-            });
-          }
-        });
-      }
-    });
-
+    // --- Links ---
     const customLinkGenerator = (d: any) => {
         let s = d.source;
         let t = d.target;
         
+        // Spouse centering logic
         if (s.data.connections && s.data.connections.some((c: any) => c.label === 'همسر')) {
             const spouseConn = s.data.connections.find((c: any) => c.label === 'همسر');
             const spouseNode = nodeMapRef.current.get(spouseConn.targetId);
@@ -469,11 +379,9 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
         }
 
         if (linkStyle === 'straight') {
-             if (orientation === 'horizontal') {
-                return `M${s.y},${s.x} L${s.y},${t.x} L${t.y},${t.x}`; 
-             } else {
-                return `M${s.x},${s.y} L${t.x},${s.y} L${t.x},${t.y}`;
-             }
+             return orientation === 'horizontal'
+                ? `M${s.y},${s.x} L${t.y},${t.x}` 
+                : `M${s.x},${s.y} L${t.x},${t.y}`;
         }
 
         if (linkStyle === 'step') {
@@ -494,26 +402,38 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
         if (orientation === 'horizontal') {
             const mx = (s.y + t.y) / 2;
-            return `M ${s.y} ${s.x} 
-                    C ${mx} ${s.x + offset}, 
-                      ${mx} ${t.x + offset}, 
-                      ${t.y} ${t.x}`;
+            return `M ${s.y} ${s.x} C ${mx} ${s.x + offset}, ${mx} ${t.x + offset}, ${t.y} ${t.x}`;
         } else {
             const my = (s.y + t.y) / 2;
-            return `M ${s.x} ${s.y} 
-                    C ${s.x + offset} ${my}, 
-                      ${t.x + offset} ${my}, 
-                      ${t.x} ${t.y}`;
+            return `M ${s.x} ${s.y} C ${s.x + offset} ${my}, ${t.x + offset} ${my}, ${t.x} ${t.y}`;
         }
     };
 
     const gContent = g.append("g");
+
+    // Extra Links (Non-Tree)
+    const extraLinks: any[] = [];
+    nodes.descendants().forEach((sourceNode: any) => {
+      if (sourceNode.data.connections) {
+        sourceNode.data.connections.forEach((conn: any) => {
+          const targetNode = nodeMapRef.current.get(conn.targetId);
+          if (targetNode) {
+            extraLinks.push({
+              source: sourceNode,
+              target: targetNode,
+              label: conn.label
+            });
+          }
+        });
+      }
+    });
 
     const visibleExtraLinks = extraLinks.filter(d => {
         if (d.label === 'همسر' && !showSpouseConnections) return false;
         return true;
     });
 
+    // Draw Extra Links
     gContent.selectAll(".extra-link")
       .data(visibleExtraLinks)
       .enter().append("path")
@@ -521,20 +441,13 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr("d", (d: any) => {
           const s = d.source;
           const t = d.target;
-          const dist = Math.sqrt(Math.pow(s.x - t.x, 2) + Math.pow(s.y - t.y, 2));
-          
-          if (dist < 180) { 
-             return orientation === 'horizontal' 
-                 ? `M ${s.y} ${s.x} L ${t.y} ${t.x}` 
-                 : `M ${s.x} ${s.y} L ${t.x} ${t.y}`;
-          }
-
+          // Simple Straight or Curve
           if (orientation === 'horizontal') {
               const mx = (s.y + t.y) / 2;
-              return `M ${s.y} ${s.x} C ${mx} ${s.x}, ${mx} ${t.x}, ${t.y} ${t.x}`;
+              return `M ${s.y} ${s.x} Q ${mx} ${(s.x + t.x)/2} ${t.y} ${t.x}`;
           } else {
               const my = (s.y + t.y) / 2;
-              return `M ${s.x} ${s.y} C ${s.x} ${my}, ${t.x} ${my}, ${t.x} ${t.y}`;
+              return `M ${s.x} ${s.y} Q ${(s.x + t.x)/2} ${my} ${t.x} ${t.y}`;
           }
       })
       .attr("fill", "none")
@@ -543,12 +456,26 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr("stroke-dasharray", (d: any) => d.label === 'همسر' ? "0" : "5,5")
       .attr("opacity", (d: any) => {
          if (!isVisibleInTime(d.source.data) || !isVisibleInTime(d.target.data)) return 0;
-         if (!hasHighlight) return 0.6;
-         const srcHi = highlightedIds.has(d.source.data.id);
-         const tgtHi = highlightedIds.has(d.target.data.id);
-         return (srcHi && tgtHi) ? 1 : 0.1;
+         return hasHighlight ? (highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id) ? 1 : 0.1) : 0.6;
       });
+      
+    // Connection Labels
+    if (showConnectionLabels) {
+        gContent.selectAll(".extra-link-label")
+            .data(visibleExtraLinks)
+            .enter().append("text")
+            .attr("x", (d: any) => orientation === 'horizontal' ? (d.source.y + d.target.y)/2 : (d.source.x + d.target.x)/2)
+            .attr("y", (d: any) => orientation === 'horizontal' ? (d.source.x + d.target.x)/2 : (d.source.y + d.target.y)/2)
+            .attr("dy", -5)
+            .attr("text-anchor", "middle")
+            .text((d: any) => d.label)
+            .style("font-size", "9px")
+            .style("fill", colors.linkExtra)
+            .style("opacity", (d: any) => hasHighlight ? (highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id) ? 1 : 0) : 0.8)
+            .style("font-family", fontFamily);
+    }
 
+    // Tree Links
     const visibleLinks = nodes.links().filter((d: any) => {
         if (d.source.data.relation === 'SystemRoot') return false;
         if (!showParentChildConnections) return false;
@@ -565,11 +492,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .attr("fill", "none")
       .attr("stroke", (d: any) => {
           if (hasHighlight && highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id)) return colors.selectedRing;
-          
-          if (colorMode === 'branch' && d.target._branchColor) {
-              return d.target._branchColor;
-          }
-
+          if (colorMode === 'branch' && d.target._branchColor) return d.target._branchColor;
           return colors.link;
       })
       .attr("stroke-width", (d: any) => {
@@ -578,11 +501,11 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       })
       .style("opacity", (d: any) => {
          if (!isVisibleInTime(d.source.data) || !isVisibleInTime(d.target.data)) return 0;
-         if (!hasHighlight) return 1;
-         if (highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id)) return 1;
-         return 0.1;
+         if (hasHighlight && !(highlightedIds.has(d.source.data.id) && highlightedIds.has(d.target.data.id))) return 0.1;
+         return 1;
       });
 
+    // --- NODES ---
     const node = gContent.selectAll(".node")
       .data(nodes.descendants())
       .enter().append("g")
@@ -592,24 +515,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
       .on("click", (event: any, d: HierarchyPointNode<FamilyMember>) => {
         if(d.data.relation === 'SystemRoot') return;
         event.stopPropagation();
-        
-        // --- Click Feedback Animation ---
-        const el = select(event.currentTarget);
-        const transform = el.attr("transform");
-        
-        // Instant "press" effect (scale down then up)
-        el.transition()
-            .duration(100)
-            .ease(easeQuadOut)
-            .attr("transform", `${transform} scale(0.9)`)
-            .transition()
-            .duration(150)
-            .ease(easeElasticOut)
-            .attr("transform", `${transform} scale(1)`);
-            
-        setTimeout(() => {
-           onNodeClick(d.data);
-        }, 50);
+        onNodeClick(d.data, event);
       })
       .on("dblclick", (event: any, d: HierarchyPointNode<FamilyMember>) => {
           if(d.data.relation === 'SystemRoot') return;
@@ -620,7 +526,7 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
           event.preventDefault();
           event.stopPropagation();
           if(d.data.relation === 'SystemRoot') return;
-          onNodeClick(d.data);
+          onNodeClick(d.data, event);
           setContextMenu({ 
               x: event.clientX, 
               y: event.clientY, 
@@ -634,201 +540,229 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
          return highlightedIds.has(d.data.id) ? 1 : 0.2; 
       });
 
-    const animatedNode = node.append("g")
-      .attr("class", "animate-fade-in-scale");
+    // Node Animation Group
+    const animatedNode = node.append("g").attr("class", "animate-fade-in-scale");
+
+    // === SHAPE RENDERING === //
+    const clipPathId = (d: any) => `clip-${d.data.id}`;
+    const rectW = 140;
+    const rectH = 60;
 
     animatedNode.each(function(d: any) {
-        if (selectedId === d.data.id) {
-            const el = select(this);
-            
-            // 1. Inner Glow/Pulse (Background)
-            el.insert("circle", ":first-child")
-              .attr("r", isCompact ? 20 : 30)
-              .attr("fill", colors.selectedRing)
-              .attr("fill-opacity", 0.2)
-              .attr("class", "animate-pulse-ring");
-
-            // 2. Outer Dashed Ring (Selection Indicator)
-            el.append("circle")
-              .attr("r", isCompact ? 23 : 33)
-              .attr("fill", "none")
-              .attr("stroke", colors.selectedRing)
-              .attr("stroke-width", "1.5px")
-              .attr("stroke-dasharray", "4,3")
-              .attr("stroke-opacity", 0.7);
-        }
-    });
-
-    animatedNode.append("circle")
-      .attr("r", isCompact ? 20 : 30)
-      .attr("fill", colors.nodeFill)
-      .attr("stroke", (d: any) => {
-          if (selectedId === d.data.id) return colors.selectedRing;
-          if (colorMode === 'branch' && d._branchColor) return d._branchColor;
-          return colors.nodeStroke;
-      })
-      .attr("stroke-width", (d: any) => selectedId === d.data.id ? "3px" : "2px") // Thicker stroke for selected
-      .style("filter", "drop-shadow(0px 4px 6px rgba(0,0,0,0.1))")
-      .style("transition", "all 0.3s ease");
-
-    const clipPathId = (d: any) => `clip-${d.data.id}`;
-    animatedNode.append("clipPath")
-      .attr("id", clipPathId)
-      .append("circle")
-      .attr("r", isCompact ? 18 : 28);
-
-    animatedNode.each(function(d: HierarchyPointNode<FamilyMember>) {
         const el = select(this);
-        const shouldShowAvatar = (showAvatars ?? true) && !isCompact;
+        const isSelected = selectedIds.has(d.data.id);
+        const color = (colorMode === 'branch' && d._branchColor) ? d._branchColor : colors.nodeStroke;
         
-        if (d.data.imageUrl && shouldShowAvatar) {
-            el.append("image")
-              .attr("xlink:href", d.data.imageUrl)
-              .attr("x", isCompact ? -18 : -28)
-              .attr("y", isCompact ? -18 : -28)
-              .attr("width", isCompact ? 36 : 56)
-              .attr("height", isCompact ? 36 : 56)
-              .attr("clip-path", `url(#${clipPathId(d)})`)
-              .attr("preserveAspectRatio", "xMidYMid slice");
-        } else {
-            const iconScale = isCompact ? 1.0 : 1.5; 
-            const iconSize = 24 * iconScale;
-            const offset = -iconSize / 2;
-            
-            let iconPath = MALE_ICON; 
-            let iconColor = colors.maleIcon;
-
-            // Use Branch Color for Icon if no image in Branch Mode
-            if (colorMode === 'branch' && d._branchColor) {
-                iconColor = d._branchColor;
+        // 1. Selection Rings
+        if (isSelected) {
+            if (isRect) {
+                el.append("rect")
+                  .attr("width", rectW + 8).attr("height", rectH + 8)
+                  .attr("x", -(rectW/2) - 4).attr("y", -(rectH/2) - 4)
+                  .attr("rx", 16)
+                  .attr("fill", "none")
+                  .attr("stroke", colors.selectedRing)
+                  .attr("stroke-width", 2)
+                  .attr("stroke-dasharray", "5,3");
             } else {
-                if (d.data.gender === 'female') {
-                    iconPath = FEMALE_ICON;
-                    iconColor = colors.femaleIcon;
-                } else if (d.data.gender === 'other') {
-                    iconPath = MALE_ICON;
-                    iconColor = colors.textSecondary;
-                }
+                el.insert("circle", ":first-child")
+                  .attr("r", isCompact ? 20 : 30)
+                  .attr("fill", colors.selectedRing)
+                  .attr("fill-opacity", 0.2)
+                  .attr("class", "animate-pulse-ring");
+                el.append("circle")
+                  .attr("r", isCompact ? 23 : 33)
+                  .attr("fill", "none")
+                  .attr("stroke", colors.selectedRing)
+                  .attr("stroke-width", "1.5px")
+                  .attr("stroke-dasharray", "4,3");
+            }
+        }
+
+        // 2. Main Shape (Rect or Circle)
+        if (isRect) {
+            el.append("rect")
+              .attr("width", rectW).attr("height", rectH)
+              .attr("x", -rectW/2).attr("y", -rectH/2)
+              .attr("rx", 12)
+              .attr("fill", colors.nodeFill)
+              .attr("stroke", isSelected ? colors.selectedRing : color)
+              .attr("stroke-width", isSelected ? 3 : 2)
+              .style("filter", enableShadows ? `drop-shadow(0px 4px 6px ${colors.shadow})` : "none");
+              
+            // Image Clip Path for Rect
+            el.append("clipPath").attr("id", clipPathId(d)).append("circle").attr("r", 22).attr("cx", -rectW/2 + 30).attr("cy", 0);
+            
+            // Image / Icon
+            const shouldShowAvatar = (showAvatars ?? true);
+            if (d.data.imageUrl && shouldShowAvatar) {
+                 el.append("image")
+                  .attr("xlink:href", d.data.imageUrl)
+                  .attr("x", -rectW/2 + 8)
+                  .attr("y", -22)
+                  .attr("width", 44)
+                  .attr("height", 44)
+                  .attr("clip-path", `url(#${clipPathId(d)})`)
+                  .attr("preserveAspectRatio", "xMidYMid slice");
+            } else {
+                 const iconColor = (d.data.gender === 'female' ? colors.femaleIcon : colors.maleIcon);
+                 el.append("circle").attr("r", 22).attr("cx", -rectW/2 + 30).attr("cy", 0).attr("fill", iconColor + '20'); // Light BG
+                 el.append("path")
+                   .attr("d", d.data.gender === 'female' ? FEMALE_ICON : MALE_ICON)
+                   .attr("fill", iconColor)
+                   .attr("transform", `translate(${-rectW/2 + 18}, -12) scale(1)`);
             }
 
-            el.append("path")
-              .attr("d", iconPath)
-              .attr("fill", iconColor)
-              .attr("transform", `translate(${offset}, ${offset}) scale(${iconScale})`);
-        }
+            // Text Info (Right Side)
+            if (showLabels) {
+                el.append("text")
+                  .attr("x", -10)
+                  .attr("y", -5)
+                  .attr("text-anchor", "middle")
+                  .text(d.data.name)
+                  .style("font-family", fontFamily)
+                  .style("font-size", "12px")
+                  .style("font-weight", "bold")
+                  .style("fill", colors.text);
+            }
+            if (showDates) {
+                const birth = d.data.birthDate ? d.data.birthDate.split('/')[0] : '';
+                const ageText = showAge ? calculateAge(d.data.birthDate, d.data.deathDate) : '';
+                el.append("text")
+                  .attr("x", -10)
+                  .attr("y", 12)
+                  .attr("text-anchor", "middle")
+                  .text(birth + ' ' + ageText)
+                  .style("font-family", "monospace")
+                  .style("font-size", "10px")
+                  .style("fill", colors.textSecondary);
+            }
+            
+            // Tags (Bottom Right)
+            if (showTags && d.data.tags && d.data.tags.length > 0) {
+                 const tag = d.data.tags[0]; // Show first tag only in compact rect
+                 el.append("rect")
+                   .attr("x", 20).attr("y", 15)
+                   .attr("width", 40).attr("height", 12)
+                   .attr("rx", 4)
+                   .attr("fill", tag.color)
+                   .attr("opacity", 0.8);
+                 el.append("text")
+                   .attr("x", 40).attr("y", 24)
+                   .attr("text-anchor", "middle")
+                   .text(tag.label)
+                   .style("font-size", "8px")
+                   .style("fill", "#fff");
+            }
 
-        const shouldShowSpouseIcon = showSpouseConnections ?? true;
-        if (shouldShowSpouseIcon && d.data.connections && d.data.connections.some(c => c.label === 'همسر')) {
-             const cx = isCompact ? 14 : 22;
-             const cy = isCompact ? 14 : 22;
-             const r = isCompact ? 6 : 8;
-             const sc = isCompact ? 0.35 : 0.5;
-             const tx = isCompact ? 10 : 16;
-             const ty = isCompact ? 10 : 16;
+        } else {
+            // CIRCLE MODE (Classic)
+            el.append("circle")
+              .attr("r", isCompact ? 20 : 30)
+              .attr("fill", colors.nodeFill)
+              .attr("stroke", isSelected ? colors.selectedRing : color)
+              .attr("stroke-width", isSelected ? "3px" : "2px")
+              .style("filter", enableShadows ? `drop-shadow(0px 4px 6px ${colors.shadow})` : "none");
 
-             el.append("circle")
-               .attr("r", r)
-               .attr("cx", cx)
-               .attr("cy", cy)
-               .attr("fill", colors.nodeFill)
-               .attr("stroke", colors.linkSpouse)
-               .attr("stroke-width", 1);
+            el.append("clipPath").attr("id", clipPathId(d)).append("circle").attr("r", isCompact ? 18 : 28);
 
-             el.append("g")
-               .attr("transform", `translate(${tx}, ${ty}) scale(${sc})`)
-               .html(`<path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="${colors.linkSpouse}"/>`);
+            const shouldShowAvatar = (showAvatars ?? true) && !isCompact;
+            if (d.data.imageUrl && shouldShowAvatar) {
+                el.append("image")
+                  .attr("xlink:href", d.data.imageUrl)
+                  .attr("x", isCompact ? -18 : -28)
+                  .attr("y", isCompact ? -18 : -28)
+                  .attr("width", isCompact ? 36 : 56)
+                  .attr("height", isCompact ? 36 : 56)
+                  .attr("clip-path", `url(#${clipPathId(d)})`)
+                  .attr("preserveAspectRatio", "xMidYMid slice");
+            } else {
+                const iconScale = isCompact ? 1.0 : 1.5; 
+                const iconSize = 24 * iconScale;
+                const offset = -iconSize / 2;
+                
+                let iconPath = MALE_ICON; 
+                let iconColor = colors.maleIcon;
+                if (colorMode === 'branch' && d._branchColor) iconColor = d._branchColor;
+                else if (d.data.gender === 'female') { iconPath = FEMALE_ICON; iconColor = colors.femaleIcon; }
+
+                el.append("path")
+                  .attr("d", iconPath)
+                  .attr("fill", iconColor)
+                  .attr("transform", `translate(${offset}, ${offset}) scale(${iconScale})`);
+            }
+            
+            // Labels for Circle
+             if (showLabels) {
+                const textY = isCompact ? 32 : 45;
+                el.append("text")
+                  .attr("dy", textY)
+                  .attr("text-anchor", "middle")
+                  .text(d.data.name)
+                  .style("font-family", fontFamily)
+                  .style("font-size", isCompact ? "10px" : "12px")
+                  .style("font-weight", "bold")
+                  .style("fill", colors.text)
+                  .style("text-shadow", "0px 1px 2px rgba(255,255,255,0.8)");
+            }
+            if (showDates) {
+                const dateY = isCompact ? 42 : 58;
+                el.append("text")
+                  .attr("dy", dateY)
+                  .attr("text-anchor", "middle")
+                  .text(() => {
+                      const birth = d.data.birthDate ? d.data.birthDate.split('/')[0] : '';
+                      const age = showAge ? calculateAge(d.data.birthDate, d.data.deathDate) : '';
+                      return birth + ' ' + age;
+                  })
+                  .style("font-family", "monospace")
+                  .style("font-size", "10px")
+                  .style("fill", colors.textSecondary);
+            }
+            
+            // Tags for Circle (Little dots or pills below)
+            if (showTags && d.data.tags) {
+                const tagY = isCompact ? 50 : 68;
+                d.data.tags.forEach((tag: any, i: number) => {
+                    if (i > 2) return; // Limit tags
+                    el.append("circle")
+                      .attr("cx", (i - (d.data.tags.length-1)/2) * 8)
+                      .attr("cy", tagY)
+                      .attr("r", 3)
+                      .attr("fill", tag.color);
+                });
+            }
         }
     });
 
-    if (showLabels) {
-        const textY = isCompact ? 32 : 45;
-        animatedNode.append("text")
-          .attr("dy", textY)
-          .attr("text-anchor", "middle")
-          .text((d: any) => d.data.name)
-          .style("font-family", fontFamily)
-          .style("font-size", isCompact ? "10px" : "12px")
-          .style("font-weight", "bold")
-          .style("fill", colors.text)
-          .style("text-shadow", "0px 1px 2px rgba(255,255,255,0.8)");
-    }
+  }, [data, dimensions, orientation, theme, highlightedIds, currentYear, treeSettings, selectedIds]);
 
-    if (showDates) {
-        const dateY = isCompact ? 42 : 58;
-        animatedNode.append("text")
-          .attr("dy", dateY)
-          .attr("text-anchor", "middle")
-          .text((d: any) => {
-              const birth = d.data.birthDate ? d.data.birthDate.split('/')[0] : '';
-              if (showAge) {
-                  const age = calculateAge(d.data.birthDate, d.data.deathDate);
-                  return birth + (age ? ` ${age}` : '');
-              }
-              return birth;
-          })
-          .style("font-family", "monospace")
-          .style("font-size", "10px")
-          .style("fill", colors.textSecondary);
-    }
-
-  }, [data, dimensions, orientation, theme, highlightedIds, currentYear, treeSettings]);
-
-  const handleZoomIn = () => {
-    if (svgRef.current && zoomRef.current) {
-      select(svgRef.current).transition().call(zoomRef.current.scaleBy, 1.2);
-    }
-  };
-
-  const handleZoomOut = () => {
-    if (svgRef.current && zoomRef.current) {
-      select(svgRef.current).transition().call(zoomRef.current.scaleBy, 0.8);
-    }
-  };
-
+  // Handle Zoom/Pan Actions
+  const handleZoomIn = () => { if (svgRef.current && zoomRef.current) select(svgRef.current).transition().call(zoomRef.current.scaleBy, 1.2); };
+  const handleZoomOut = () => { if (svgRef.current && zoomRef.current) select(svgRef.current).transition().call(zoomRef.current.scaleBy, 0.8); };
   const handleFit = () => {
       if (!svgRef.current || !zoomRef.current) return;
       const rootG = select(svgRef.current).select('g');
       // @ts-ignore
       const bounds = rootG.node()?.getBBox();
       if (!bounds) return;
-
       const parent = svgRef.current.parentElement;
       if (!parent) return;
-
       const fullWidth = parent.clientWidth;
       const fullHeight = parent.clientHeight;
       const midX = bounds.x + bounds.width / 2;
       const midY = bounds.y + bounds.height / 2;
-
-      if (bounds.width === 0 || bounds.height === 0) return;
-
+      if (bounds.width === 0) return;
       const scale = 0.85 / Math.max(bounds.width / fullWidth, bounds.height / fullHeight);
-      const translate = [fullWidth / 2 - scale * midX, fullHeight / 2 - scale * midY];
-
-      select(svgRef.current)
-        .transition()
-        .duration(750)
-        .call(
+      select(svgRef.current).transition().duration(750).call(
             // @ts-ignore
             zoomRef.current.transform, 
-            zoomIdentity.translate(translate[0], translate[1]).scale(scale)
-        );
-  };
-
-  const toggleLinkStyle = () => {
-      const current = treeSettings.linkStyle;
-      const next = current === 'curved' ? 'step' : current === 'step' ? 'straight' : 'curved';
-      if (onSettingsChange) {
-         onSettingsChange({ linkStyle: next });
-      }
+            zoomIdentity.translate(fullWidth / 2 - scale * midX, fullHeight / 2 - scale * midY).scale(scale)
+      );
   };
 
   const glassClass = theme === 'dark' ? 'glass-panel-dark' : 'glass-panel';
-
-  const handleMenuAction = (action: () => void) => {
-      action();
-      setContextMenu(null);
-  };
+  const handleMenuAction = (action: () => void) => { action(); setContextMenu(null); };
 
   return (
     <div ref={wrapperRef} className="w-full h-full relative overflow-hidden bg-transparent" onContextMenu={(e) => e.preventDefault()}>
@@ -836,18 +770,17 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
 
       {/* Floating Toolbar */}
       <div className={`absolute bottom-6 right-6 flex flex-col gap-2 p-2 rounded-xl shadow-xl transition-all animate-slide-up ${glassClass}`}>
-        <button onClick={handleFit} className="p-2 rounded-lg hover:bg-teal-500/20 text-teal-600 transition-colors" title="وسط چین (Space)"><Maximize size={20} /></button>
+        <button onClick={handleFit} className="p-2 rounded-lg hover:bg-teal-500/20 text-teal-600 transition-colors" title="Fit"><User size={20} /></button>
         <button onClick={handleZoomIn} className="p-2 rounded-lg hover:bg-teal-500/20 text-teal-600 transition-colors"><ZoomIn size={20} /></button>
         <button onClick={handleZoomOut} className="p-2 rounded-lg hover:bg-teal-500/20 text-teal-600 transition-colors"><ZoomOut size={20} /></button>
         <div className="h-px bg-slate-300 dark:bg-slate-600 my-1 mx-2"></div>
-        <button onClick={() => onOrientationChange('vertical')} className={`p-2 rounded-lg transition-colors ${orientation === 'vertical' ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title="عمودی"><ArrowDown size={20} /></button>
-        <button onClick={() => onOrientationChange('horizontal')} className={`p-2 rounded-lg transition-colors ${orientation === 'horizontal' ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title="افقی"><ArrowRight size={20} /></button>
+        <button onClick={() => onOrientationChange('vertical')} className={`p-2 rounded-lg transition-colors ${orientation === 'vertical' ? 'bg-teal-500 text-white' : 'hover:bg-teal-500/20 text-teal-600'}`}><ArrowDown size={20} /></button>
+        <button onClick={() => onOrientationChange('horizontal')} className={`p-2 rounded-lg transition-colors ${orientation === 'horizontal' ? 'bg-teal-500 text-white' : 'hover:bg-teal-500/20 text-teal-600'}`}><ArrowRight size={20} /></button>
         <div className="h-px bg-slate-300 dark:bg-slate-600 my-1 mx-2"></div>
-        <button onClick={toggleLinkStyle} className={`p-2 rounded-lg transition-colors ${treeSettings.linkStyle !== 'curved' ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title={`تغییر نوع خط: ${treeSettings.linkStyle === 'curved' ? 'منحنی' : treeSettings.linkStyle === 'step' ? 'شکسته' : 'صاف'}`}><GitBranch size={20} /></button>
-        <button onClick={() => onSettingsChange && onSettingsChange({ preventOverlap: !treeSettings.preventOverlap })} className={`p-2 rounded-lg transition-colors ${treeSettings.preventOverlap ? 'bg-teal-500 text-white shadow-md' : 'hover:bg-teal-500/20 text-teal-600'}`} title="جلوگیری از تداخل"><GitMerge size={20} /></button>
+        <button onClick={() => onSettingsChange && onSettingsChange({ preventOverlap: !treeSettings.preventOverlap })} className={`p-2 rounded-lg transition-colors ${treeSettings.preventOverlap ? 'bg-teal-500 text-white' : 'hover:bg-teal-500/20 text-teal-600'}`}><GitMerge size={20} /></button>
       </div>
 
-      {/* Custom Context Menu */}
+      {/* Context Menu */}
       {contextMenu && (
           <div 
             className={`fixed z-[2001] rounded-xl shadow-2xl p-2 min-w-[200px] context-menu-enter ${glassClass} border ${theme === 'dark' ? 'border-slate-700 text-slate-200' : 'border-slate-100 text-slate-700'}`}
@@ -855,55 +788,16 @@ const FamilyTree: React.FC<FamilyTreeProps> = ({
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.preventDefault()}
           >
-              <div className="px-3 py-2 text-xs font-bold opacity-50 border-b border-dashed border-slate-300 dark:border-slate-600 mb-1">
-                  {contextMenu.member.name}
-              </div>
-
-              <button onClick={() => handleMenuAction(() => onOpenDetails(contextMenu.member))} className="w-full text-right px-3 py-2.5 hover:bg-teal-500/10 rounded-lg flex items-center gap-2 text-sm transition-colors">
-                  <User size={16} className="text-teal-500"/> مشاهده پروفایل
-              </button>
-              
+              <div className="px-3 py-2 text-xs font-bold opacity-50 border-b border-dashed border-slate-300 dark:border-slate-600 mb-1">{contextMenu.member.name}</div>
+              <button onClick={() => handleMenuAction(() => onOpenDetails(contextMenu.member))} className="w-full text-right px-3 py-2.5 hover:bg-teal-500/10 rounded-lg flex items-center gap-2 text-sm transition-colors"><User size={16} className="text-teal-500"/> مشاهده پروفایل</button>
               <div className="h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
-
-              <button onClick={() => handleMenuAction(() => onAddChild && onAddChild(contextMenu.member.id))} className="w-full text-right px-3 py-2.5 hover:bg-teal-500/10 rounded-lg flex items-center gap-2 text-sm transition-colors">
-                  <Plus size={16}/> افزودن فرزند
-              </button>
-              <button onClick={() => handleMenuAction(() => onAddSibling && onAddSibling(contextMenu.member.id))} className="w-full text-right px-3 py-2.5 hover:bg-blue-500/10 rounded-lg flex items-center gap-2 text-sm transition-colors">
-                  <GitBranch size={16}/> افزودن هم‌سطح
-              </button>
-              <button onClick={() => handleMenuAction(() => onAddSpouse && onAddSpouse(contextMenu.member.id))} className="w-full text-right px-3 py-2.5 hover:bg-pink-500/10 rounded-lg flex items-center gap-2 text-sm transition-colors text-pink-500 font-medium">
-                  <Heart size={16}/> ثبت همسر / ازدواج
-              </button>
-
+              <button onClick={() => handleMenuAction(() => onAddChild && onAddChild(contextMenu.member.id))} className="w-full text-right px-3 py-2.5 hover:bg-teal-500/10 rounded-lg flex items-center gap-2 text-sm transition-colors"><Plus size={16}/> افزودن فرزند</button>
+              <button onClick={() => handleMenuAction(() => onAddSibling && onAddSibling(contextMenu.member.id))} className="w-full text-right px-3 py-2.5 hover:bg-blue-500/10 rounded-lg flex items-center gap-2 text-sm transition-colors"><GitBranch size={16}/> افزودن هم‌سطح</button>
+              <button onClick={() => handleMenuAction(() => onAddSpouse && onAddSpouse(contextMenu.member.id))} className="w-full text-right px-3 py-2.5 hover:bg-pink-500/10 rounded-lg flex items-center gap-2 text-sm transition-colors text-pink-500"><Heart size={16}/> ثبت ازدواج</button>
               <div className="h-px bg-slate-200 dark:bg-slate-700 my-1"></div>
-
-              <button onClick={() => handleMenuAction(() => onDeleteMember && onDeleteMember(contextMenu.member.id))} className="w-full text-right px-3 py-2.5 hover:bg-red-500/10 text-red-500 rounded-lg flex items-center gap-2 text-sm transition-colors">
-                  <Trash2 size={16}/> حذف عضو
-              </button>
-              <button onClick={() => setContextMenu(null)} className="w-full text-right px-3 py-2.5 hover:bg-slate-500/10 text-slate-400 rounded-lg flex items-center gap-2 text-xs transition-colors mt-1">
-                  <XCircle size={14}/> بستن منو
-              </button>
+              <button onClick={() => handleMenuAction(() => onDeleteMember && onDeleteMember(contextMenu.member.id))} className="w-full text-right px-3 py-2.5 hover:bg-red-500/10 text-red-500 rounded-lg flex items-center gap-2 text-sm transition-colors"><Trash2 size={16}/> حذف عضو</button>
+              <button onClick={() => setContextMenu(null)} className="w-full text-right px-3 py-2.5 hover:bg-slate-500/10 text-slate-400 rounded-lg flex items-center gap-2 text-xs transition-colors mt-1"><XCircle size={14}/> بستن</button>
           </div>
-      )}
-
-      {/* Quick Action Floating Menu (Only shows if Context Menu is CLOSED) */}
-      {selectedNodePos && !contextMenu && (
-         <div 
-            className="absolute z-40 flex flex-col gap-2 context-menu-enter"
-            style={{ 
-                left: selectedNodePos.x, 
-                top: selectedNodePos.y, 
-                transform: 'translate(-50%, -100%) translateY(-50px)' 
-            }}
-         >
-             <div className={`flex gap-2 p-2 rounded-full shadow-lg border ${theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-100'}`}>
-                 <button onClick={() => { if(selectedId) { onOpenDetails(nodeMapRef.current.get(selectedId)?.data!); } }} className="p-2 rounded-full hover:bg-teal-50 text-teal-600 transition-colors" title="مشاهده پروفایل"><User size={18}/></button>
-                 <div className="w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-                 <button onClick={() => { if(selectedId && onAddChild) onAddChild(selectedId); }} className="p-2 rounded-full hover:bg-teal-50 text-teal-600 transition-colors" title="افزودن فرزند"><Plus size={18}/></button>
-                 <button onClick={() => { if(selectedId && onAddSibling) onAddSibling(selectedId); }} className="p-2 rounded-full hover:bg-blue-50 text-blue-600 transition-colors" title="افزودن هم‌سطح"><GitBranch size={18}/></button>
-                 <button onClick={() => { if(selectedId && onAddSpouse) onAddSpouse(selectedId); }} className="p-2 rounded-full hover:bg-pink-50 text-pink-500 transition-colors" title="افزودن همسر"><Heart size={18}/></button>
-             </div>
-         </div>
       )}
     </div>
   );
